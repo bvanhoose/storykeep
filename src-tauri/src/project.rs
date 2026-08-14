@@ -260,8 +260,27 @@ pub fn outline_path(root: &Path, id: &str) -> Result<PathBuf> {
     Ok(root.join(OUTLINE_DIR).join(format!("{}.md", safe_id(id)?)))
 }
 
+/// Reference files keep the name they were imported with, so unlike document
+/// ids they can hold spaces, parentheses and non-ASCII. What they must not
+/// hold is anything that would let the name escape `references/`: path
+/// separators, drive colons, traversal, or the characters no filesystem we
+/// target accepts.
+fn safe_reference_name(name: &str) -> Result<&str> {
+    let ok = !name.is_empty()
+        && name.len() <= 255
+        && name != "."
+        && name != ".."
+        && name.trim() == name
+        && !name.chars().any(|c| r#"<>:"/\|?*"#.contains(c) || c.is_control());
+    if ok {
+        Ok(name)
+    } else {
+        Err(Error::Invalid(format!("unsafe reference name: {name:?}")))
+    }
+}
+
 pub fn reference_path(root: &Path, name: &str) -> Result<PathBuf> {
-    Ok(root.join(REFERENCE_DIR).join(safe_id(name)?))
+    Ok(root.join(REFERENCE_DIR).join(safe_reference_name(name)?))
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +432,18 @@ mod tests {
         assert!(safe_id("a/b").is_err());
         assert!(safe_id("..").is_err());
         assert!(safe_id("9f1c2e40-3f2a-4d1b-9e77-6d0f1a2b3c4d").is_ok());
+    }
+
+    /// Imported research keeps its human name; only escapes are refused.
+    #[test]
+    fn reference_names_accept_ordinary_files_and_reject_escapes() {
+        let root = Path::new("/p");
+        for ok in ["map of the coast.png", "notes (1).txt", "Straße.pdf", "PXL_2026.jpg"] {
+            assert!(reference_path(root, ok).is_ok(), "{ok:?} should be accepted");
+        }
+        for bad in ["../x", "a/b", "a\\b", "C:evil", "..", " padded.txt", "tab\there"] {
+            assert!(reference_path(root, bad).is_err(), "{bad:?} should be rejected");
+        }
     }
 
     #[test]
