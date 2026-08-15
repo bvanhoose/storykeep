@@ -354,6 +354,12 @@ export default function App() {
 
   // --- assistant ------------------------------------------------------------
 
+  // The request the panel is currently listening to. Events from any other
+  // request — one that was stopped, or replaced by a newer send — are dropped,
+  // so a straggling "done" from an old stream can't end the new one early.
+  const activeRequest = useRef<string | null>(null);
+  const requestSeq = useRef(0);
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let dead = false;
@@ -365,13 +371,25 @@ export default function App() {
         next[next.length - 1] = patch(next[next.length - 1]);
         return next;
       });
+    const current = (requestId: string) => requestId === activeRequest.current;
 
     void listenToAssistant({
-      onDelta: (text) => append((last) => ({ ...last, content: last.content + text })),
-      onReasoning: (text) =>
-        append((last) => ({ ...last, reasoning: (last.reasoning ?? "") + text })),
-      onDone: () => setStreaming(false),
-      onError: (message) => {
+      onDelta: ({ requestId, text }) => {
+        if (current(requestId)) append((last) => ({ ...last, content: last.content + text }));
+      },
+      onReasoning: ({ requestId, text }) => {
+        if (current(requestId)) {
+          append((last) => ({ ...last, reasoning: (last.reasoning ?? "") + text }));
+        }
+      },
+      onDone: ({ requestId }) => {
+        if (!current(requestId)) return;
+        activeRequest.current = null;
+        setStreaming(false);
+      },
+      onError: ({ requestId, message }) => {
+        if (!current(requestId)) return;
+        activeRequest.current = null;
         append((last) => ({ ...last, content: message, error: true }));
         setStreaming(false);
       },
@@ -412,11 +430,14 @@ export default function App() {
         ...chat.filter((m) => !m.error),
         { role: "user", content: text },
       ];
+      const requestId = String(++requestSeq.current);
+      activeRequest.current = requestId;
       setChat([...history, { role: "assistant", content: "" }]);
       setStreaming(true);
       setSideTab("assistant");
       try {
         await api.aiSend({
+          requestId,
           provider: settings.provider,
           model: settings.model,
           effort: settings.effort,
@@ -426,11 +447,22 @@ export default function App() {
         });
       } catch {
         // The `ai:error` event already put the message in the transcript.
-        setStreaming(false);
+        if (activeRequest.current === requestId) {
+          activeRequest.current = null;
+          setStreaming(false);
+        }
       }
     },
     [settings, streaming, chat, buildContext],
   );
+
+  // Stop is immediate from the writer's side: the panel returns to idle now,
+  // and whatever the old stream still emits is ignored by request id.
+  const stopAssistant = useCallback(() => {
+    activeRequest.current = null;
+    setStreaming(false);
+    void api.aiCancel();
+  }, []);
 
   // Remember the last passage highlighted in the editor, so the assistant can
   // still act on it after focus moves to the composer.
@@ -614,7 +646,7 @@ export default function App() {
                 hasDocument={editing !== null}
                 selection={selection}
                 onSend={(text, options) => void sendToAssistant(text, options)}
-                onStop={() => void api.aiCancel()}
+                onStop={stopAssistant}
                 onClear={() => setChat([])}
                 onOpenSettings={() => setModal({ kind: "settings" })}
               />

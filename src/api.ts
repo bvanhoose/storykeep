@@ -53,6 +53,7 @@ export const api = {
   newNode: (title: string, kind: NodeKind) => invoke<BinderNode>("new_node", { title, kind }),
 
   aiSend: (request: {
+    requestId: string;
     provider: Provider;
     model: string;
     effort: string;
@@ -70,25 +71,38 @@ export const api = {
   aiCancel: () => invoke<void>("ai_cancel"),
 };
 
+/** Every assistant event names the request it belongs to, so a late event
+ *  from a turn that was stopped or replaced can be told apart and dropped. */
+export interface AiText {
+  requestId: string;
+  text: string;
+}
+
 export interface AiDone {
+  requestId: string;
   stopReason: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   cancelled: boolean;
 }
 
+export interface AiError {
+  requestId: string;
+  message: string;
+}
+
 /** Subscribe to the assistant's stream. Returns a single unsubscribe function. */
 export async function listenToAssistant(handlers: {
-  onDelta: (text: string) => void;
-  onReasoning: (text: string) => void;
+  onDelta: (delta: AiText) => void;
+  onReasoning: (delta: AiText) => void;
   onDone: (done: AiDone) => void;
-  onError: (message: string) => void;
+  onError: (error: AiError) => void;
 }): Promise<UnlistenFn> {
   const unlisteners = await Promise.all([
-    listen<string>("ai:delta", (e) => handlers.onDelta(e.payload)),
-    listen<string>("ai:reasoning", (e) => handlers.onReasoning(e.payload)),
+    listen<AiText>("ai:delta", (e) => handlers.onDelta(e.payload)),
+    listen<AiText>("ai:reasoning", (e) => handlers.onReasoning(e.payload)),
     listen<AiDone>("ai:done", (e) => handlers.onDone(e.payload)),
-    listen<string>("ai:error", (e) => handlers.onError(e.payload)),
+    listen<AiError>("ai:error", (e) => handlers.onError(e.payload)),
   ]);
   return () => unlisteners.forEach((off) => off());
 }

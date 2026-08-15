@@ -11,9 +11,9 @@
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::Notify;
 
 use crate::error::{Error, Result};
 
@@ -79,6 +79,9 @@ pub struct ChatMessage {
 #[derive(Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatRequest {
+    /// Minted by the window and echoed on every event this request emits, so
+    /// the panel can ignore anything from a turn it has already abandoned.
+    pub request_id: String,
     pub provider: Provider,
     pub model: String,
     /// low | medium | high | xhigh | max
@@ -94,7 +97,22 @@ pub struct ChatRequest {
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-struct DonePayload {
+struct TextPayload<'a> {
+    request_id: &'a str,
+    text: &'a str,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct ErrorPayload<'a> {
+    request_id: &'a str,
+    message: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct DonePayload<'a> {
+    request_id: &'a str,
     stop_reason: Option<String>,
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
@@ -133,11 +151,16 @@ for theirs. If you don't have the text you'd need to answer well, say what you'r
 ///
 /// Errors are both returned and emitted: returned so the command call site can
 /// react, emitted so the panel can render them in the transcript.
+///
+/// `cancel` is signalled by the Stop button (or by a newer request taking its
+/// place). The request is raced against it at every await, so stopping takes
+/// effect immediately rather than whenever the server next sends bytes — which,
+/// mid-thinking, can be a long time.
 pub async fn stream_chat(
     app: AppHandle,
     req: ChatRequest,
     api_key: String,
-    cancel: Arc<AtomicBool>,
+    cancel: Arc<Notify>,
 ) -> Result<()> {
     let result = match req.provider {
         Provider::Anthropic => stream_anthropic(&app, &req, &api_key, &cancel).await,
@@ -149,16 +172,42 @@ pub async fn stream_chat(
     };
 
     if let Err(e) = &result {
-        let _ = app.emit(EVENT_ERROR, e.to_string());
+        let _ = app.emit(
+            EVENT_ERROR,
+            ErrorPayload {
+                request_id: &req.request_id,
+                message: e.to_string(),
+            },
+        );
     }
     result
+}
+
+fn emit_done(
+    app: &AppHandle,
+    req: &ChatRequest,
+    stop_reason: Option<String>,
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+    cancelled: bool,
+) {
+    let _ = app.emit(
+        EVENT_DONE,
+        DonePayload {
+            request_id: &req.request_id,
+            stop_reason,
+            input_tokens,
+            output_tokens,
+            cancelled,
+        },
+    );
 }
 
 async fn stream_anthropic(
     app: &AppHandle,
     req: &ChatRequest,
     api_key: &str,
-    cancel: &Arc<AtomicBool>,
+    cancel: &Arc<Notify>,
 ) -> Result<()> {
     let messages: Vec<serde_json::Value> = req
         .messages
@@ -192,15 +241,24 @@ async fn stream_anthropic(
         .connect_timeout(std::time::Duration::from_secs(15))
         .build()?;
 
-    let response = client
+    let sending = client
         .post(ANTHROPIC_URL)
         .header("x-api-key", api_key)
         .header("anthropic-version", ANTHROPIC_VERSION)
         .header("anthropic-beta", ANTHROPIC_BETA)
         .header("content-type", "application/json")
         .json(&body)
-        .send()
-        .await?;
+        .send();
+
+    // `biased` so a pending cancel is honoured before any ready chunk.
+    let response = tokio::select! {
+        biased;
+        _ = cancel.notified() => {
+            emit_done(app, req, Some("cancelled".into()), None, None, true);
+            return Ok(());
+        }
+        sent = sending => sent?,
+    };
 
     if !response.status().is_success() {
         let status = response.status();
@@ -215,21 +273,20 @@ async fn stream_anthropic(
     let mut output_tokens: Option<u64> = None;
     let mut got_text = false;
 
-    while let Some(chunk) = stream.next().await {
-        if cancel.load(Ordering::Relaxed) {
-            let _ = app.emit(
-                EVENT_DONE,
-                DonePayload {
-                    stop_reason: Some("cancelled".into()),
-                    input_tokens,
-                    output_tokens,
-                    cancelled: true,
-                },
-            );
-            return Ok(());
-        }
+    loop {
+        let chunk = tokio::select! {
+            biased;
+            _ = cancel.notified() => {
+                emit_done(app, req, Some("cancelled".into()), input_tokens, output_tokens, true);
+                return Ok(());
+            }
+            next = stream.next() => match next {
+                Some(chunk) => chunk?,
+                None => break,
+            },
+        };
 
-        for data in decoder.push(&String::from_utf8_lossy(&chunk?)) {
+        for data in decoder.push(&String::from_utf8_lossy(&chunk)) {
             if data == "[DONE]" {
                 continue;
             }
@@ -244,13 +301,25 @@ async fn stream_anthropic(
                         Some("text_delta") => {
                             if let Some(text) = delta["text"].as_str() {
                                 got_text = true;
-                                let _ = app.emit(EVENT_DELTA, text);
+                                let _ = app.emit(
+                                    EVENT_DELTA,
+                                    TextPayload {
+                                        request_id: &req.request_id,
+                                        text,
+                                    },
+                                );
                             }
                         }
                         Some("thinking_delta") => {
                             if let Some(text) = delta["thinking"].as_str() {
                                 if !text.is_empty() {
-                                    let _ = app.emit(EVENT_REASONING, text);
+                                    let _ = app.emit(
+                                        EVENT_REASONING,
+                                        TextPayload {
+                                            request_id: &req.request_id,
+                                            text,
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -287,15 +356,7 @@ async fn stream_anthropic(
         ));
     }
 
-    let _ = app.emit(
-        EVENT_DONE,
-        DonePayload {
-            stop_reason,
-            input_tokens,
-            output_tokens,
-            cancelled: false,
-        },
-    );
+    emit_done(app, req, stop_reason, input_tokens, output_tokens, false);
     Ok(())
 }
 

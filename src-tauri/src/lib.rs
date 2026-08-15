@@ -6,11 +6,11 @@ mod secrets;
 mod settings;
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
+use tokio::sync::Notify;
 
 use ai::{ChatRequest, Provider};
 use error::{Error, Result};
@@ -20,8 +20,9 @@ use settings::Settings;
 struct AppState {
     config_dir: PathBuf,
     secrets: secrets::Store,
-    /// Set when a request is in flight; flipping it stops the stream loop.
-    cancel: Mutex<Option<Arc<AtomicBool>>>,
+    /// Held while a request is in flight; signalling it stops the stream at
+    /// its next await, whether that is the initial send or a chunk read.
+    cancel: Mutex<Option<Arc<Notify>>>,
 }
 
 impl AppState {
@@ -268,12 +269,12 @@ async fn ai_send(
         ))
     })?;
 
-    let cancel = Arc::new(AtomicBool::new(false));
+    let cancel = Arc::new(Notify::new());
     {
         // Replace any in-flight request, and drop the guard before awaiting.
         let mut slot = state.cancel.lock().unwrap();
         if let Some(previous) = slot.replace(Arc::clone(&cancel)) {
-            previous.store(true, Ordering::Relaxed);
+            previous.notify_one();
         }
     }
 
@@ -290,7 +291,9 @@ async fn ai_send(
 #[tauri::command]
 fn ai_cancel(state: State<'_, AppState>) {
     if let Some(cancel) = state.cancel.lock().unwrap().take() {
-        cancel.store(true, Ordering::Relaxed);
+        // notify_one stores a permit if the stream isn't waiting yet, so the
+        // signal is never lost between chunk reads.
+        cancel.notify_one();
     }
 }
 
