@@ -143,21 +143,68 @@ export default function App() {
     setChat([]);
   }, []);
 
+  // The binder tree is saved a beat after it changes. The pending write is
+  // kept where a forced flush (Ctrl S, closing the window) can reach it.
   const saveMeta = useRef<number | undefined>(undefined);
+  const pendingMeta = useRef<{ path: string; project: Project } | null>(null);
+
+  const flushMeta = useCallback(async () => {
+    window.clearTimeout(saveMeta.current);
+    const outstanding = pendingMeta.current;
+    pendingMeta.current = null;
+    if (!outstanding) return;
+    try {
+      await api.saveProjectMeta(outstanding.path, outstanding.project);
+      setStats(await api.manuscriptStats(outstanding.path, outstanding.project));
+    } catch (e) {
+      onError(errorMessage(e));
+    }
+  }, [onError]);
+
   const commitProject = useCallback(
     (next: Project) => {
       if (!path) return;
       setOpened({ path, project: next });
+      pendingMeta.current = { path, project: next };
       window.clearTimeout(saveMeta.current);
-      saveMeta.current = window.setTimeout(() => {
-        api
-          .saveProjectMeta(path, next)
-          .then(() => api.manuscriptStats(path, next).then(setStats))
-          .catch((e) => onError(errorMessage(e)));
-      }, 400);
+      saveMeta.current = window.setTimeout(() => void flushMeta(), 400);
     },
-    [path, onError],
+    [path, flushMeta],
   );
+
+  /** Write everything outstanding: the open document, its outline, the tree. */
+  const saveAll = useCallback(
+    () => Promise.all([buffer.flush(), flushMeta()]).then(() => undefined),
+    [buffer.flush, flushMeta],
+  );
+
+  // Closing the window is the one exit the autosave delay can't see coming.
+  // Hold the close, write what's pending, then tear the window down ourselves
+  // (destroy, not close — close would raise this same request again).
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let closing = false;
+    let unlisten: (() => void) | undefined;
+    let dead = false;
+
+    void win
+      .onCloseRequested(async (event) => {
+        if (closing) return; // a second request while saving is let through
+        closing = true;
+        event.preventDefault();
+        try {
+          await saveAll();
+        } finally {
+          await win.destroy().catch(() => undefined);
+        }
+      })
+      .then((off) => (dead ? off() : (unlisten = off)));
+
+    return () => {
+      dead = true;
+      unlisten?.();
+    };
+  }, [saveAll]);
 
   const openProjectAt = useCallback(
     async (target: string) => {
@@ -507,7 +554,7 @@ export default function App() {
       }
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void buffer.flush();
+        void saveAll();
         return;
       }
       if (mod && e.key === ",") {
@@ -527,7 +574,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusMode, toggleFocusMode, buffer, chooseAndOpen, moveSelected]);
+  }, [focusMode, toggleFocusMode, saveAll, chooseAndOpen, moveSelected]);
 
   // --- render ---------------------------------------------------------------
 
@@ -551,7 +598,7 @@ export default function App() {
         assistantOpen={sideTab === "assistant"}
         onNewProject={() => void startNewProject()}
         onOpenProject={() => void chooseAndOpen()}
-        onSave={() => void buffer.flush()}
+        onSave={() => void saveAll()}
         onExport={(format) => void exportManuscript(format)}
         onProjectDetails={() => setModal({ kind: "details" })}
         onSettings={() => setModal({ kind: "settings" })}
