@@ -119,6 +119,44 @@ struct DonePayload<'a> {
     cancelled: bool,
 }
 
+/// What a request may carry for a given model.
+///
+/// Adaptive thinking and the effort level arrived with the 4.6 generation;
+/// Haiku 4.5, Sonnet 4.5 and anything older answer both with a 400, so they
+/// get a plain request. Server-side refusal fallbacks are documented for the
+/// Opus 5 / Fable tier only.
+#[derive(Debug, PartialEq, Eq)]
+struct Features {
+    adaptive_thinking: bool,
+    effort: bool,
+    /// The 4.6 models take low / medium / high / max; `xhigh` came later.
+    xhigh_effort: bool,
+    fallbacks: bool,
+}
+
+fn features_for(model: &str) -> Features {
+    let model = model.to_ascii_lowercase();
+    let mut numbers = model
+        .split(['-', '.', '@'])
+        .filter_map(|part| part.parse::<u32>().ok());
+    let version = (numbers.next(), numbers.next());
+
+    let (major, minor) = match version {
+        (Some(major), minor) => (major, minor.unwrap_or(0)),
+        // A name we can't read is most likely something new; send the modern shape.
+        (None, _) => (5, 0),
+    };
+    let modern = major >= 5 || (major == 4 && minor >= 6);
+    let frontier = model.contains("fable") || model.contains("mythos");
+
+    Features {
+        adaptive_thinking: modern,
+        effort: modern,
+        xhigh_effort: major >= 5 || (major == 4 && minor >= 7),
+        fallbacks: frontier || (model.contains("opus") && major >= 5),
+    }
+}
+
 /// The assistant's standing instructions. Kept deliberately short: it states
 /// the job, the voice rule (which is the one thing a writing assistant must not
 /// get wrong), and the length discipline current models need to be told once.
@@ -220,35 +258,47 @@ async fn stream_anthropic(
         return Err(Error::Invalid("There is nothing to send.".into()));
     }
 
-    let thinking = if req.show_reasoning {
-        serde_json::json!({ "type": "adaptive", "display": "summarized" })
-    } else {
-        serde_json::json!({ "type": "adaptive" })
-    };
+    let features = features_for(&req.model);
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": req.model,
         "max_tokens": MAX_TOKENS,
         "stream": true,
         "system": system_prompt(&req.context),
         "messages": messages,
-        "thinking": thinking,
-        "output_config": { "effort": req.effort },
-        "fallbacks": "default",
     });
+    if features.adaptive_thinking {
+        body["thinking"] = if req.show_reasoning {
+            serde_json::json!({ "type": "adaptive", "display": "summarized" })
+        } else {
+            serde_json::json!({ "type": "adaptive" })
+        };
+    }
+    if features.effort {
+        let effort = if req.effort == "xhigh" && !features.xhigh_effort {
+            "high"
+        } else {
+            req.effort.as_str()
+        };
+        body["output_config"] = serde_json::json!({ "effort": effort });
+    }
+    if features.fallbacks {
+        body["fallbacks"] = serde_json::json!("default");
+    }
 
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(15))
         .build()?;
 
-    let sending = client
+    let mut request = client
         .post(ANTHROPIC_URL)
         .header("x-api-key", api_key)
         .header("anthropic-version", ANTHROPIC_VERSION)
-        .header("anthropic-beta", ANTHROPIC_BETA)
-        .header("content-type", "application/json")
-        .json(&body)
-        .send();
+        .header("content-type", "application/json");
+    if features.fallbacks {
+        request = request.header("anthropic-beta", ANTHROPIC_BETA);
+    }
+    let sending = request.json(&body).send();
 
     // `biased` so a pending cancel is honoured before any ready chunk.
     let response = tokio::select! {
@@ -454,6 +504,48 @@ mod tests {
         assert_eq!(find_event_boundary("data: 1\n\ndata: 2"), Some((7, 2)));
         assert_eq!(find_event_boundary("data: 1\r\n\r\ndata: 2"), Some((7, 4)));
         assert_eq!(find_event_boundary("data: incomplete"), None);
+    }
+
+    /// Haiku 4.5 is in the Settings suggestions and rejects the modern
+    /// parameters, so it must get a plain request rather than a 400.
+    #[test]
+    fn older_models_get_a_plain_request() {
+        let haiku = features_for("claude-haiku-4-5");
+        assert!(!haiku.adaptive_thinking);
+        assert!(!haiku.effort);
+        assert!(!haiku.fallbacks);
+        assert_eq!(features_for("claude-sonnet-4-5"), haiku);
+        assert_eq!(features_for("claude-3-5-sonnet-20241022"), haiku);
+    }
+
+    #[test]
+    fn modern_models_take_thinking_and_effort() {
+        let opus46 = features_for("claude-opus-4-6");
+        assert!(opus46.adaptive_thinking && opus46.effort);
+        assert!(!opus46.xhigh_effort, "xhigh arrived with 4.7");
+        assert!(!opus46.fallbacks);
+
+        let opus48 = features_for("claude-opus-4-8");
+        assert!(opus48.adaptive_thinking && opus48.effort && opus48.xhigh_effort);
+        assert!(!opus48.fallbacks, "fallbacks are documented for the 5 tier");
+
+        assert!(features_for("claude-sonnet-5").adaptive_thinking);
+        assert!(!features_for("claude-sonnet-5").fallbacks);
+    }
+
+    #[test]
+    fn frontier_models_get_fallbacks() {
+        for model in ["claude-opus-5", "claude-fable-5-1", "claude-mythos-5-1"] {
+            let f = features_for(model);
+            assert!(f.adaptive_thinking && f.effort && f.xhigh_effort && f.fallbacks, "{model}");
+        }
+    }
+
+    #[test]
+    fn unknown_model_names_are_treated_as_new() {
+        let f = features_for("claude-something-else");
+        assert!(f.adaptive_thinking && f.effort);
+        assert!(!f.fallbacks);
     }
 
     #[test]
