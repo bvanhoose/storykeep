@@ -126,13 +126,18 @@ export default function App() {
     return () => media.removeEventListener("change", apply);
   }, [settings]);
 
+  // Re-check the key when the provider changes or a dialog closes (the
+  // Settings dialog is where keys are added). Not on every settings edit:
+  // each check is a keychain lookup, and on a locked Linux keyring that
+  // means a password prompt per keystroke in the model field.
+  const provider = settings?.provider ?? null;
   useEffect(() => {
-    if (!settings) return;
+    if (!provider) return;
     api
-      .keyStatus(settings.provider)
+      .keyStatus(provider)
       .then((status) => setKeyReady(status.configured))
       .catch(() => setKeyReady(false));
-  }, [settings, modal]);
+  }, [provider, modal]);
 
   // --- project --------------------------------------------------------------
 
