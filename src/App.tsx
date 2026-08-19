@@ -534,14 +534,16 @@ export default function App() {
 
   // --- keyboard -------------------------------------------------------------
 
-  const toggleFocusMode = useCallback(() => {
-    setFocusMode((on) => {
-      void getCurrentWindow()
-        .setFullscreen(!on)
-        .catch(() => undefined);
-      return !on;
-    });
-  }, []);
+  const toggleFocusMode = useCallback(() => setFocusMode((on) => !on), []);
+
+  // The window follows the flag rather than being flipped inside the state
+  // updater: React may run an updater more than once (it does under
+  // StrictMode), and a side effect there would toggle fullscreen twice.
+  useEffect(() => {
+    void getCurrentWindow()
+      .setFullscreen(focusMode)
+      .catch(() => undefined);
+  }, [focusMode]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
