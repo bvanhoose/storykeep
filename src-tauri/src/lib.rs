@@ -2,6 +2,7 @@ mod ai;
 mod error;
 mod export;
 mod project;
+mod search;
 mod secrets;
 mod settings;
 
@@ -230,6 +231,11 @@ fn manuscript_stats(path: String, project: Project) -> Result<ManuscriptStats> {
 }
 
 #[tauri::command]
+fn search_project(path: String, project: Project, query: String) -> Result<search::Results> {
+    search::search(&as_root(&path)?, &project, &query)
+}
+
+#[tauri::command]
 fn export_manuscript(
     path: String,
     project: Project,
@@ -365,6 +371,7 @@ pub fn run() {
             import_reference,
             reference_full_path,
             manuscript_stats,
+            search_project,
             export_manuscript,
             suggested_export_name,
             count_words,

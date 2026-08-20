@@ -206,6 +206,19 @@ impl Project {
         }
     }
 
+    /// Every node in the binder, roots included, in display order.
+    pub fn all_nodes(&self) -> Vec<&Node> {
+        fn walk<'a>(nodes: &'a [Node], out: &mut Vec<&'a Node>) {
+            for node in nodes {
+                out.push(node);
+                walk(&node.children, out);
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.roots, &mut out);
+        out
+    }
+
     /// Every document id under the manuscript root, in reading order,
     /// skipping chapters the writer has excluded from the compile.
     pub fn manuscript_documents(&self) -> Vec<&Node> {
