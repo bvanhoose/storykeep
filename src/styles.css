@@ -684,6 +684,91 @@ button {
   color: var(--ink-faint);
 }
 
+/* --- search --------------------------------------------------------------- */
+
+.search-head {
+  flex: none;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.search-input {
+  width: 100%;
+  padding: 6px 9px;
+  background: var(--cloth-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--brass);
+}
+
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0 20px;
+}
+
+.search-group {
+  margin-bottom: 8px;
+}
+
+.search-doc {
+  padding: 8px 14px 3px;
+  font-family: var(--font-book);
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-hit {
+  display: block;
+  width: 100%;
+  padding: 4px 14px 4px 22px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-dim);
+  overflow-wrap: anywhere;
+}
+
+.search-hit:hover {
+  background: var(--cloth-sunk);
+  color: var(--ink);
+}
+
+.search-hit mark {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--brass-wash);
+  color: var(--brass);
+  font-weight: 600;
+}
+
+.search-where {
+  display: inline-block;
+  margin-right: 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.search-foot {
+  flex: none;
+  padding: 6px 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- assistant ------------------------------------------------------------ */
 
 .chat {

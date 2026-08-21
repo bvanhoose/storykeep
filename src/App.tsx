@@ -30,6 +30,8 @@ import {
   type NodeRole,
   type OpenedProject,
   type Project,
+  type SearchHit,
+  type SearchResults,
   type Settings,
 } from "./types";
 
@@ -41,7 +43,8 @@ import {
   ProjectDetailsDialog,
   SettingsDialog,
 } from "./components/Dialogs";
-import { Editor } from "./components/Editor";
+import { Editor, type Jump } from "./components/Editor";
+import { Search } from "./components/Search";
 import { Outline, SidePanel, type SideTab } from "./components/SidePanel";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
@@ -67,6 +70,11 @@ export default function App() {
   const [streaming, setStreaming] = useState(false);
   const [keyReady, setKeyReady] = useState(false);
   const [selection, setSelection] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchFocus, setSearchFocus] = useState(0);
+  const [jump, setJump] = useState<Jump | null>(null);
 
   const { toast, show } = useToast();
   const binderWidth = useDraggableWidth("sk.binderWidth", 232, 170, 420);
@@ -146,6 +154,8 @@ export default function App() {
     const first = allDocuments(next.project.roots)[0];
     setSelectedId(first?.id ?? next.project.roots[0]?.id ?? null);
     setChat([]);
+    setSearchQuery("");
+    setJump(null);
   }, []);
 
   // The binder tree is saved a beat after it changes. The pending write is
@@ -404,6 +414,49 @@ export default function App() {
     [project, path, buffer, show, onError],
   );
 
+  // --- search ---------------------------------------------------------------
+
+  // Runs a beat after the query settles. The open document is flushed first
+  // so what's searched on disk is what's on the page.
+  const searchSeq = useRef(0);
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!path || !project || !query) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    const seq = ++searchSeq.current;
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        await buffer.flush();
+        const results = await api.searchProject(path, project, query);
+        if (seq === searchSeq.current) setSearchResults(results);
+      } catch (e) {
+        if (seq === searchSeq.current) onError(errorMessage(e));
+      } finally {
+        if (seq === searchSeq.current) setSearching(false);
+      }
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [path, project, searchQuery, buffer.flush, onError]);
+
+  const openSearch = useCallback(() => {
+    setSideTab("search");
+    setSearchFocus((n) => n + 1);
+  }, []);
+
+  const jumpSeq = useRef(0);
+  const jumpToHit = useCallback((hit: SearchHit) => {
+    setSelectedId(hit.id);
+    if (hit.source === "body") {
+      setJump({ id: hit.id, offset: hit.offset, length: hit.length, seq: ++jumpSeq.current });
+    } else if (hit.source === "outline") {
+      setSideTab("outline");
+    }
+  }, []);
+
   // --- assistant ------------------------------------------------------------
 
   // The request the panel is currently listening to. Events from any other
@@ -559,6 +612,11 @@ export default function App() {
         toggleFocusMode();
         return;
       }
+      if (mod && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        openSearch();
+        return;
+      }
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void saveAll();
@@ -581,7 +639,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusMode, toggleFocusMode, saveAll, chooseAndOpen, moveSelected]);
+  }, [focusMode, toggleFocusMode, saveAll, chooseAndOpen, moveSelected, openSearch]);
 
   // --- render ---------------------------------------------------------------
 
@@ -673,6 +731,7 @@ export default function App() {
             loading={buffer.loading}
             settings={settings}
             place={place}
+            jump={jump && buffer.loadedId === jump.id ? jump : null}
             onBodyChange={buffer.editBody}
             onTitleChange={(title) => editing && renameNode(editing.id, title)}
           />
@@ -690,6 +749,15 @@ export default function App() {
           <SidePanel tab={sideTab} onTab={setSideTab}>
             {sideTab === "outline" ? (
               <Outline node={editing} text={buffer.outline} onChange={buffer.editOutline} />
+            ) : sideTab === "search" ? (
+              <Search
+                query={searchQuery}
+                results={searchResults}
+                searching={searching}
+                focusSeq={searchFocus}
+                onQuery={setSearchQuery}
+                onJump={jumpToHit}
+              />
             ) : (
               <Assistant
                 ready={keyReady}

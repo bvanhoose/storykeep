@@ -39,6 +39,26 @@ export interface ManuscriptStats {
   documents: number;
 }
 
+export type SearchSource = "title" | "body" | "outline";
+
+/** One match from project-wide search. Offsets are UTF-16 units, which is
+ *  what both `String.slice` and the editor's `setSelectionRange` count. */
+export interface SearchHit {
+  id: string;
+  title: string;
+  source: SearchSource;
+  offset: number;
+  length: number;
+  snippet: string;
+  snippetOffset: number;
+  snippetLength: number;
+}
+
+export interface SearchResults {
+  hits: SearchHit[];
+  truncated: boolean;
+}
+
 export type Provider = "anthropic" | "openai" | "gemini" | "local";
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 export type Theme = "system" | "light" | "dark" | "sepia";

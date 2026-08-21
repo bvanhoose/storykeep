@@ -11,6 +11,7 @@ import type {
   OpenedProject,
   Project,
   Provider,
+  SearchResults,
   Settings,
 } from "./types";
 
@@ -45,6 +46,8 @@ export const api = {
 
   manuscriptStats: (path: string, project: Project) =>
     invoke<ManuscriptStats>("manuscript_stats", { path, project }),
+  searchProject: (path: string, project: Project, query: string) =>
+    invoke<SearchResults>("search_project", { path, project, query }),
   exportManuscript: (path: string, project: Project, format: string, destination: string) =>
     invoke<string>("export_manuscript", { path, project, format, destination }),
   suggestedExportName: (project: Project, format: string) =>

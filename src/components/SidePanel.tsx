@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 import type { BinderNode } from "../types";
 
-export type SideTab = "outline" | "assistant";
+export type SideTab = "outline" | "search" | "assistant";
+
+const TABS: { id: SideTab; label: string }[] = [
+  { id: "outline", label: "Outline" },
+  { id: "search", label: "Search" },
+  { id: "assistant", label: "Assistant" },
+];
 
 interface SidePanelProps {
   tab: SideTab;
@@ -11,26 +17,20 @@ interface SidePanelProps {
 
 export function SidePanel({ tab, onTab, children }: SidePanelProps) {
   return (
-    <aside className="side" aria-label="Outline and assistant">
+    <aside className="side" aria-label="Outline, search and assistant">
       <div className="tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          className="tab"
-          aria-selected={tab === "outline"}
-          onClick={() => onTab("outline")}
-        >
-          Outline
-        </button>
-        <button
-          type="button"
-          role="tab"
-          className="tab"
-          aria-selected={tab === "assistant"}
-          onClick={() => onTab("assistant")}
-        >
-          Assistant
-        </button>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            className="tab"
+            aria-selected={tab === t.id}
+            onClick={() => onTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
       {children}
     </aside>

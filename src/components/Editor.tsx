@@ -1,6 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { BinderNode, Settings } from "../types";
 
+/** A request to select a passage — from a search hit — once its document is
+ *  the one on the page. `seq` makes each request distinct even at the same spot. */
+export interface Jump {
+  id: string;
+  offset: number;
+  length: number;
+  seq: number;
+}
+
 interface EditorProps {
   node: BinderNode | null;
   body: string;
@@ -8,6 +17,8 @@ interface EditorProps {
   settings: Settings;
   /** Position of this document in the manuscript, for the ribbon. */
   place: { index: number; total: number } | null;
+  /** Only passed once `body` belongs to `jump.id`; null otherwise. */
+  jump: Jump | null;
   onBodyChange: (value: string) => void;
   onTitleChange: (title: string) => void;
 }
@@ -18,12 +29,31 @@ export function Editor({
   loading,
   settings,
   place,
+  jump,
   onBodyChange,
   onTitleChange,
 }: EditorProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const [progress, setProgress] = useState(0);
+  const jumped = useRef(0);
+
+  // Select the requested passage and bring it into view. The textarea is
+  // the full height of the document, so focusing it scrolls nothing; the
+  // position has to be measured and the page scrolled by hand.
+  useEffect(() => {
+    const el = area.current;
+    const page = scroller.current;
+    if (!jump || !el || !page || !node || node.id !== jump.id) return;
+    if (jumped.current === jump.seq || jump.offset > body.length) return;
+    jumped.current = jump.seq;
+
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(jump.offset, jump.offset + jump.length);
+    const withinArea = caretTop(el, jump.offset);
+    const areaTop = el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop;
+    page.scrollTo({ top: Math.max(0, areaTop + withinArea - page.clientHeight * 0.35) });
+  }, [jump, node, body]);
 
   // Grow the textarea to fit, so the whole document scrolls as one page
   // instead of a box inside a page.
@@ -147,6 +177,57 @@ function handleMarkup(
 
   onChange(value.slice(0, start) + marker + selected + marker + value.slice(end));
   queueMicrotask(() => el.setSelectionRange(start + marker.length, end + marker.length));
+}
+
+/**
+ * How far down a textarea a character position sits.
+ *
+ * A textarea won't say where its text wraps, so the text up to `offset` is
+ * laid out again in a hidden block carrying the same typography and width,
+ * and the next character's position is read off that.
+ */
+function caretTop(el: HTMLTextAreaElement, offset: number): number {
+  const mirror = document.createElement("div");
+  const style = getComputedStyle(el);
+  for (const prop of [
+    "font-family",
+    "font-size",
+    "font-weight",
+    "font-style",
+    "line-height",
+    "letter-spacing",
+    "word-spacing",
+    "tab-size",
+    "text-indent",
+    "padding-top",
+    "padding-right",
+    "padding-bottom",
+    "padding-left",
+    "border-top-width",
+    "border-right-width",
+    "border-left-width",
+    "box-sizing",
+  ]) {
+    mirror.style.setProperty(prop, style.getPropertyValue(prop));
+  }
+  mirror.style.position = "absolute";
+  mirror.style.top = "0";
+  mirror.style.left = "-10000px";
+  mirror.style.width = `${el.offsetWidth}px`;
+  mirror.style.whiteSpace = "pre-wrap";
+  mirror.style.overflowWrap = "break-word";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+
+  mirror.textContent = el.value.slice(0, offset);
+  const marker = document.createElement("span");
+  marker.textContent = el.value.slice(offset, offset + 1) || "\u200b";
+  mirror.appendChild(marker);
+
+  document.body.appendChild(mirror);
+  const top = marker.offsetTop;
+  mirror.remove();
+  return top;
 }
 
 function placeholderFor(node: BinderNode): string {

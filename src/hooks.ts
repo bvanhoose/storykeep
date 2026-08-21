@@ -14,6 +14,9 @@ interface Pending {
 export interface DocumentBuffer {
   body: string;
   outline: string;
+  /** Which document `body` and `outline` currently belong to. Lags `docId`
+   *  by a load, so callers that act on the text can wait for the right one. */
+  loadedId: string | null;
   loading: boolean;
   saving: boolean;
   editBody: (value: string) => void;
@@ -36,6 +39,7 @@ export function useDocumentBuffer(
 ): DocumentBuffer {
   const [body, setBody] = useState("");
   const [outline, setOutline] = useState("");
+  const [loadedId, setLoadedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -106,6 +110,7 @@ export function useDocumentBuffer(
     if (!path || !docId) {
       setBody("");
       setOutline("");
+      setLoadedId(null);
       return;
     }
     let stale = false;
@@ -115,6 +120,7 @@ export function useDocumentBuffer(
         if (stale) return;
         setBody(nextBody);
         setOutline(nextOutline);
+        setLoadedId(docId);
       })
       .catch((e) => !stale && failed.current(errorMessage(e)))
       .finally(() => !stale && setLoading(false));
@@ -135,7 +141,7 @@ export function useDocumentBuffer(
     };
   }, [flush]);
 
-  return { body, outline, loading, saving, editBody, editOutline, flush };
+  return { body, outline, loadedId, loading, saving, editBody, editOutline, flush };
 }
 
 /** A transient message at the bottom of the window. */
