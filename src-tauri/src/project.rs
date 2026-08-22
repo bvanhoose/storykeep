@@ -136,6 +136,25 @@ impl Node {
     }
 }
 
+/// A binder item the writer has deleted but not yet purged.
+///
+/// Its files stay exactly where they were under `content/` and `outlines/`;
+/// only the tree forgets it. That makes deletion a pure edit to
+/// `project.json`, restore the reverse, and neither can lose text.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Trashed {
+    pub node: Node,
+    /// Where it was, so Restore can put it back: the parent it sat under
+    /// (`None` at top level, which the binder never allows for a deletion)
+    /// and its position among the siblings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub index: usize,
+    pub deleted_at: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -150,6 +169,10 @@ pub struct Project {
     /// Which root folder is the manuscript (drives the manuscript word count
     /// and what Export compiles).
     pub manuscript_root_id: String,
+    /// Deleted items, newest first. Not part of the tree: nothing here is
+    /// searched, counted, or compiled.
+    #[serde(default)]
+    pub trash: Vec<Trashed>,
 }
 
 impl Project {
@@ -172,6 +195,7 @@ impl Project {
                 Node::root(NodeRole::Characters),
                 Node::root(NodeRole::Notes),
             ],
+            trash: Vec::new(),
         }
     }
 
@@ -368,6 +392,31 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Remove every file a node and its descendants own: document bodies,
+/// outlines, and imported reference files. The tree is not touched — the
+/// caller has already dropped the node from `project.json`.
+pub fn purge(root: &Path, node: &Node) -> Result<()> {
+    if node.kind.has_document() {
+        remove_if_present(&content_path(root, &node.id)?)?;
+        remove_if_present(&outline_path(root, &node.id)?)?;
+    }
+    if let Some(file) = &node.file {
+        remove_if_present(&reference_path(root, file)?)?;
+    }
+    for child in &node.children {
+        purge(root, child)?;
+    }
+    Ok(())
+}
+
+fn remove_if_present(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
+
 pub fn read_text(path: &Path) -> Result<String> {
     match fs::read_to_string(path) {
         Ok(text) => Ok(text),
@@ -534,6 +583,65 @@ mod tests {
         assert_eq!(characters.title, "Characters");
         assert_eq!(characters.kind, NodeKind::Folder);
         assert_eq!(project.roots.len(), 4);
+    }
+
+    /// A format-2 project has no `trash`; it loads as empty and is written
+    /// back once something is deleted.
+    #[test]
+    fn trash_defaults_to_empty_and_round_trips() {
+        let mut project = Project::starter("Untitled".into());
+        let json = serde_json::to_string(&project).unwrap();
+        let without: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut stripped = without.as_object().unwrap().clone();
+        stripped.remove("trash");
+        let back: Project = serde_json::from_value(serde_json::Value::Object(stripped)).unwrap();
+        assert!(back.trash.is_empty());
+
+        let chapter = project.roots[0].children.remove(0);
+        project.trash.push(Trashed {
+            node: chapter.clone(),
+            parent_id: Some(project.roots[0].id.clone()),
+            index: 0,
+            deleted_at: now_iso(),
+        });
+        let json = serde_json::to_string(&project).unwrap();
+        let back: Project = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.trash.len(), 1);
+        assert_eq!(back.trash[0].node.id, chapter.id);
+        assert_eq!(back.trash[0].parent_id.as_deref(), Some(project.roots[0].id.as_str()));
+        assert!(back.manuscript_documents().is_empty(), "trash is outside the tree");
+    }
+
+    /// Purging a folder takes every file underneath it, and nothing else.
+    #[test]
+    fn purge_removes_a_subtree_s_files() {
+        let dir = std::env::temp_dir().join(format!("storykeep-purge-{}", uuid::Uuid::new_v4()));
+        let (root, _) = create(&dir, "Salt").unwrap();
+
+        let mut folder = Node::new("Part One", NodeKind::Folder);
+        let inner = Node::new("Scene", NodeKind::Chapter);
+        let mut map = Node::new("map.png", NodeKind::Reference);
+        map.file = Some("map.png".into());
+        let keep = Node::new("Keep me", NodeKind::Note);
+
+        for node in [&inner, &keep] {
+            fs::write(content_path(&root, &node.id).unwrap(), "text").unwrap();
+            fs::write(outline_path(&root, &node.id).unwrap(), "beats").unwrap();
+        }
+        fs::write(reference_path(&root, "map.png").unwrap(), b"png").unwrap();
+        folder.children.push(inner.clone());
+        folder.children.push(map);
+
+        purge(&root, &folder).unwrap();
+
+        assert!(!content_path(&root, &inner.id).unwrap().exists());
+        assert!(!outline_path(&root, &inner.id).unwrap().exists());
+        assert!(!reference_path(&root, "map.png").unwrap().exists());
+        assert!(content_path(&root, &keep.id).unwrap().exists());
+        // A second purge of the same node is not an error.
+        purge(&root, &folder).unwrap();
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Roles round-trip through JSON, and a folder the writer adds stays free.

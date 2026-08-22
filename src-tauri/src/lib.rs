@@ -166,18 +166,13 @@ fn write_outline(path: String, id: String, text: String) -> Result<()> {
     project::write_atomic(&target, text.as_bytes())
 }
 
-/// Remove a document's files. The binder tree itself is edited in the frontend
-/// and persisted by `save_project_meta`.
+/// Remove the files behind items the writer has emptied from the trash. The
+/// tree itself is edited in the frontend and persisted by `save_project_meta`.
 #[tauri::command]
-fn delete_document(path: String, id: String) -> Result<()> {
+fn purge_nodes(path: String, nodes: Vec<Node>) -> Result<()> {
     let root = as_root(&path)?;
-    for target in [
-        project::content_path(&root, &id)?,
-        project::outline_path(&root, &id)?,
-    ] {
-        if target.exists() {
-            std::fs::remove_file(target)?;
-        }
+    for node in &nodes {
+        project::purge(&root, node)?;
     }
     Ok(())
 }
@@ -367,7 +362,7 @@ pub fn run() {
             write_document,
             read_outline,
             write_outline,
-            delete_document,
+            purge_nodes,
             import_reference,
             reference_full_path,
             manuscript_stats,
