@@ -37,7 +37,8 @@ export const api = {
   readOutline: (path: string, id: string) => invoke<string>("read_outline", { path, id }),
   writeOutline: (path: string, id: string, text: string) =>
     invoke<void>("write_outline", { path, id, text }),
-  deleteDocument: (path: string, id: string) => invoke<void>("delete_document", { path, id }),
+  purgeNodes: (path: string, nodes: BinderNode[]) =>
+    invoke<void>("purge_nodes", { path, nodes }),
 
   importReference: (path: string, source: string) =>
     invoke<string>("import_reference", { path, source }),

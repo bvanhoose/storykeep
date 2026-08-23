@@ -155,14 +155,27 @@ export function useContextMenu<T>() {
   return { menu, openMenu, closeMenu };
 }
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
+export interface Toast {
+  text: string;
+  tone: "info" | "error";
+  /** One button beside the text — an Undo, typically. Keeps the toast up longer. */
+  action?: ToastAction;
+}
+
 export function useToast() {
-  const [toast, setToast] = useState<{ text: string; tone: "info" | "error" } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
-  const show = useCallback((text: string, tone: "info" | "error" = "info") => {
-    setToast({ text, tone });
+  const show = useCallback((text: string, tone: "info" | "error" = "info", action?: ToastAction) => {
+    setToast({ text, tone, action });
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setToast(null), tone === "error" ? 7000 : 3200);
+    const ttl = action ? 8000 : tone === "error" ? 7000 : 3200;
+    timer.current = window.setTimeout(() => setToast(null), ttl);
   }, []);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);

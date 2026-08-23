@@ -9,6 +9,7 @@ import {
   allDocuments,
   breadcrumb,
   findNode,
+  homeRole,
   insertNode,
   locate,
   manuscriptDocuments,
@@ -27,12 +28,12 @@ import {
   type ChatMessage,
   type ManuscriptStats,
   type NodeKind,
-  type NodeRole,
   type OpenedProject,
   type Project,
   type SearchHit,
   type SearchResults,
   type Settings,
+  type TrashedItem,
 } from "./types";
 
 import { Assistant, type SendOptions } from "./components/Assistant";
@@ -54,7 +55,7 @@ type Modal =
   | { kind: "settings" }
   | { kind: "newProject"; folder: string }
   | { kind: "details" }
-  | { kind: "confirmDelete"; node: BinderNode }
+  | { kind: "confirmPurge"; items: TrashedItem[] }
   | null;
 
 export default function App() {
@@ -76,7 +77,7 @@ export default function App() {
   const [searchFocus, setSearchFocus] = useState(0);
   const [jump, setJump] = useState<Jump | null>(null);
 
-  const { toast, show } = useToast();
+  const { toast, show, dismiss } = useToast();
   const binderWidth = useDraggableWidth("sk.binderWidth", 232, 170, 420);
   const panelWidth = useDraggableWidth("sk.panelWidth", 300, 220, 520);
 
@@ -261,18 +262,7 @@ export default function App() {
     (kind: NodeKind): { parentId: string | null; index: number } => {
       if (!project) return { parentId: null, index: 0 };
 
-      // Which fixture owns this kind. A plain folder belongs wherever you are,
-      // so it has no home of its own.
-      const role: NodeRole | null =
-        kind === "chapter"
-          ? "manuscript"
-          : kind === "character"
-            ? "characters"
-            : kind === "reference"
-              ? "references"
-              : kind === "note"
-                ? "notes"
-                : null;
+      const role = homeRole(kind);
       const home = role ? roleRoot(project.roots, role) : null;
 
       // Drop it beside the selection, but only when the selection already sits
@@ -358,11 +348,55 @@ export default function App() {
     [project, commitProject],
   );
 
+  // Reads the project through the ref rather than the closure: it is called
+  // from a toast's Undo button, possibly seconds after the delete that
+  // created it, and the tree may have moved on since.
+  const restoreNode = useCallback(
+    (id: string) => {
+      const current = openedRef.current?.project;
+      if (!current) return;
+      const item = current.trash.find((t) => t.node.id === id);
+      if (!item) return;
+
+      // Back where it was if that place still exists; otherwise into the
+      // fixture that owns its kind.
+      const parent = item.parentId ? findNode(current.roots, item.parentId) : null;
+      const target = parent
+        ? { parentId: parent.id, index: Math.min(item.index, parent.children.length) }
+        : (() => {
+            const role = homeRole(item.node.kind);
+            const home =
+              (role && roleRoot(current.roots, role)) ??
+              roleRoot(current.roots, "notes") ??
+              current.roots[0];
+            return { parentId: home.id, index: home.children.length };
+          })();
+
+      commitProject({
+        ...current,
+        roots: insertNode(current.roots, target.parentId, target.index, item.node),
+        trash: current.trash.filter((t) => t.node.id !== id),
+      });
+      setSelectedId(item.node.id);
+      show(`Restored “${item.node.title}”.`);
+    },
+    [commitProject, show],
+  );
+
+  // Deletion is a move to the trash: the tree forgets the item, its files
+  // stay put, and the toast offers to undo it. Nothing is asked first.
   const deleteNode = useCallback(
-    async (target: BinderNode) => {
-      if (!project || !path || isFixedRoot(target)) return;
-      const doomed = [target, ...allDocuments(target.children)];
+    (target: BinderNode) => {
+      if (!project || isFixedRoot(target)) return;
+      const found = locate(project.roots, target.id);
+      if (!found) return;
       const { roots } = removeNode(project.roots, target.id);
+      const item: TrashedItem = {
+        node: target,
+        parentId: found.parent?.id,
+        index: found.index,
+        deletedAt: new Date().toISOString(),
+      };
 
       // Deleting something you were not looking at should not move you. Only
       // fall back when the open document is what just went.
@@ -371,17 +405,32 @@ export default function App() {
           ? current
           : (allDocuments(roots)[0]?.id ?? roots[0]?.id ?? null),
       );
-      commitProject({ ...project, roots });
-      setModal(null);
-
-      for (const doc of doomed) {
-        if (hasDocument(doc.kind)) {
-          await api.deleteDocument(path, doc.id).catch(() => undefined);
-        }
-      }
-      show(`Deleted “${target.title}”.`);
+      commitProject({ ...project, roots, trash: [item, ...project.trash] });
+      show(`Moved “${target.title}” to the trash.`, "info", {
+        label: "Undo",
+        onClick: () => restoreNode(target.id),
+      });
     },
-    [project, path, commitProject, show],
+    [project, commitProject, show, restoreNode],
+  );
+
+  const purgeItems = useCallback(
+    async (items: TrashedItem[]) => {
+      if (!project || !path) return;
+      const ids = new Set(items.map((i) => i.node.id));
+      setModal(null);
+      commitProject({ ...project, trash: project.trash.filter((t) => !ids.has(t.node.id)) });
+      try {
+        await api.purgeNodes(
+          path,
+          items.map((i) => i.node),
+        );
+        show(items.length === 1 ? `Deleted “${items[0].node.title}” for good.` : "Emptied the trash.");
+      } catch (e) {
+        onError(errorMessage(e));
+      }
+    },
+    [project, path, commitProject, show, onError],
   );
 
   const moveSelected = useCallback(
@@ -702,9 +751,9 @@ export default function App() {
             onImportReference={() => void importReference()}
             onOpenReference={(target) => void openReference(target)}
             onMove={moveSelected}
-            onDelete={(target) =>
-              !isFixedRoot(target) && setModal({ kind: "confirmDelete", node: target })
-            }
+            onDelete={deleteNode}
+            onRestore={restoreNode}
+            onPurge={(items) => setModal({ kind: "confirmPurge", items })}
             onToggleIncluded={(id) => {
               const target = findNode(project.roots, id);
               if (target) {
@@ -820,12 +869,16 @@ export default function App() {
         />
       )}
 
-      {modal?.kind === "confirmDelete" && (
+      {modal?.kind === "confirmPurge" && (
         <ConfirmDialog
-          title="Delete"
-          body={`You are about to delete “${modal.node.title}”. This action cannot be undone.`}
+          title={modal.items.length === 1 ? "Delete for good" : "Empty the trash"}
+          body={
+            modal.items.length === 1
+              ? `“${modal.items[0].node.title}” and its files will be removed from disk. This cannot be undone.`
+              : `${modal.items.length} items and their files will be removed from disk. This cannot be undone.`
+          }
           confirmLabel="Delete"
-          onConfirm={() => void deleteNode(modal.node)}
+          onConfirm={() => void purgeItems(modal.items)}
           onClose={() => setModal(null)}
         />
       )}
@@ -833,6 +886,18 @@ export default function App() {
       {toast && (
         <div className="toast" data-tone={toast.tone} role="status">
           {toast.text}
+          {toast.action && (
+            <button
+              type="button"
+              className="toast-action"
+              onClick={() => {
+                toast.action?.onClick();
+                dismiss();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
     </div>

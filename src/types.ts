@@ -19,6 +19,14 @@ export interface BinderNode {
   role?: NodeRole;
 }
 
+/** A deleted item, kept so it can be restored. Its files are still on disk. */
+export interface TrashedItem {
+  node: BinderNode;
+  parentId?: string;
+  index: number;
+  deletedAt: string;
+}
+
 export interface Project {
   schemaVersion: number;
   title: string;
@@ -27,6 +35,8 @@ export interface Project {
   modified: string;
   roots: BinderNode[];
   manuscriptRootId: string;
+  /** Newest first. Outside the tree: never searched, counted or compiled. */
+  trash: TrashedItem[];
 }
 
 export interface OpenedProject {

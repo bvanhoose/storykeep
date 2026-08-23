@@ -1,6 +1,6 @@
 /** Pure helpers for the binder tree. Every function returns new nodes rather
  *  than mutating, so React sees the change and undo stays possible later. */
-import type { BinderNode, NodeRole, Project } from "./types";
+import type { BinderNode, NodeKind, NodeRole, Project } from "./types";
 import { hasDocument } from "./types";
 
 export interface Located {
@@ -30,6 +30,23 @@ export function findNode(roots: BinderNode[], id: string | null): BinderNode | n
 /** The permanent root that owns `role`, if the project still has it. */
 export function roleRoot(roots: BinderNode[], role: NodeRole): BinderNode | null {
   return roots.find((r) => r.role === role) ?? null;
+}
+
+/** Which fixture a kind belongs in. A plain folder belongs wherever it is
+ *  made, so it has no home of its own. */
+export function homeRole(kind: NodeKind): NodeRole | null {
+  switch (kind) {
+    case "chapter":
+      return "manuscript";
+    case "character":
+      return "characters";
+    case "reference":
+      return "references";
+    case "note":
+      return "notes";
+    default:
+      return null;
+  }
 }
 
 /** The top-level root that `id` lives under, at any depth. */

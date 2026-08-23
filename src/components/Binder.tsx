@@ -3,7 +3,7 @@ import { ContextMenu, Menu, MenuItem, MenuLabel, MenuSeparator } from "./Menu";
 import { useContextMenu } from "../hooks";
 import { visibleRows } from "../tree";
 import { isFixedRoot } from "../types";
-import type { BinderNode, NodeKind, Project } from "../types";
+import type { BinderNode, NodeKind, Project, TrashedItem } from "../types";
 
 interface BinderProps {
   project: Project;
@@ -15,8 +15,12 @@ interface BinderProps {
   onImportReference: () => void;
   onOpenReference: (node: BinderNode) => void;
   onMove: (delta: -1 | 1) => void;
+  /** Moves the item to the trash. Reversible, so it doesn't ask. */
   onDelete: (node: BinderNode) => void;
   onToggleIncluded: (id: string) => void;
+  onRestore: (id: string) => void;
+  /** Removes for good. The caller confirms first. */
+  onPurge: (items: TrashedItem[]) => void;
 }
 
 export function Binder({
@@ -31,9 +35,14 @@ export function Binder({
   onMove,
   onDelete,
   onToggleIncluded,
+  onRestore,
+  onPurge,
 }: BinderProps) {
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
   const { menu, openMenu, closeMenu } = useContextMenu<BinderNode>();
+  // `null` is the Trash heading itself, whose only action is Empty.
+  const trashMenu = useContextMenu<TrashedItem | null>();
   const rows = visibleRows(project.roots);
   const selected = rows.find((r) => r.node.id === selectedId)?.node ?? null;
 
@@ -66,6 +75,51 @@ export function Binder({
             }}
           />
         ))}
+
+        {project.trash.length > 0 && (
+          <div className="trash">
+            <div
+              className="row"
+              data-kind="folder"
+              role="treeitem"
+              aria-expanded={trashOpen}
+              tabIndex={-1}
+              style={{ paddingLeft: 10 }}
+              onClick={() => setTrashOpen((v) => !v)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                trashMenu.openMenu(e, null);
+              }}
+            >
+              <span className="row-twist" data-open={trashOpen}>
+                ▶
+              </span>
+              <span className="row-title">Trash</span>
+              <span className="row-tag">{project.trash.length}</span>
+            </div>
+            {trashOpen &&
+              project.trash.map((item) => (
+                <div
+                  key={item.node.id}
+                  className="row"
+                  data-kind={item.node.kind}
+                  data-trashed="true"
+                  role="treeitem"
+                  tabIndex={-1}
+                  style={{ paddingLeft: 23 }}
+                  title="Right-click to restore"
+                  onDoubleClick={() => onRestore(item.node.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    trashMenu.openMenu(e, item);
+                  }}
+                >
+                  <span className="row-twist" />
+                  <span className="row-title">{item.node.title}</span>
+                </div>
+              ))}
+          </div>
+        )}
       </div>
 
       <div className="binder-foot">
@@ -110,8 +164,8 @@ export function Binder({
           className="icon-btn"
           onClick={() => selected && onDelete(selected)}
           disabled={!selected || isFixedRoot(selected)}
-          title={selected && isFixedRoot(selected) ? "This folder is permanent" : "Delete"}
-          aria-label="Delete"
+          title={selected && isFixedRoot(selected) ? "This folder is permanent" : "Move to trash"}
+          aria-label="Move to trash"
         >
           ×
         </button>
@@ -132,10 +186,35 @@ export function Binder({
               )}
               <MenuSeparator />
               <MenuItem danger onSelect={() => (close(), onDelete(menu.target))}>
-                Delete…
+                Move to trash
               </MenuItem>
             </>
           )}
+        </ContextMenu>
+      )}
+
+      {trashMenu.menu && (
+        <ContextMenu x={trashMenu.menu.x} y={trashMenu.menu.y} onClose={trashMenu.closeMenu}>
+          {(close) => {
+            const item = trashMenu.menu?.target ?? null;
+            return item ? (
+              <>
+                <MenuLabel>{item.node.title}</MenuLabel>
+                <MenuItem onSelect={() => (close(), onRestore(item.node.id))}>Restore</MenuItem>
+                <MenuSeparator />
+                <MenuItem danger onSelect={() => (close(), onPurge([item]))}>
+                  Delete for good…
+                </MenuItem>
+              </>
+            ) : (
+              <>
+                <MenuLabel>Trash</MenuLabel>
+                <MenuItem danger onSelect={() => (close(), onPurge(project.trash))}>
+                  Empty the trash…
+                </MenuItem>
+              </>
+            );
+          }}
         </ContextMenu>
       )}
     </nav>
