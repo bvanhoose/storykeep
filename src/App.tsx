@@ -13,6 +13,7 @@ import {
   insertNode,
   locate,
   manuscriptDocuments,
+  moveNode,
   removeNode,
   roleRoot,
   rootContaining,
@@ -441,6 +442,14 @@ export default function App() {
     [project, selectedId, commitProject],
   );
 
+  const moveNodeTo = useCallback(
+    (id: string, parentId: string, index: number) => {
+      if (!project) return;
+      commitProject({ ...project, roots: moveNode(project.roots, id, parentId, index) });
+    },
+    [project, commitProject],
+  );
+
   // --- export ---------------------------------------------------------------
 
   const exportManuscript = useCallback(
@@ -751,6 +760,7 @@ export default function App() {
             onImportReference={() => void importReference()}
             onOpenReference={(target) => void openReference(target)}
             onMove={moveSelected}
+            onMoveTo={moveNodeTo}
             onDelete={deleteNode}
             onRestore={restoreNode}
             onPurge={(items) => setModal({ kind: "confirmPurge", items })}

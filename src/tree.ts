@@ -1,7 +1,7 @@
 /** Pure helpers for the binder tree. Every function returns new nodes rather
  *  than mutating, so React sees the change and undo stays possible later. */
 import type { BinderNode, NodeKind, NodeRole, Project } from "./types";
-import { hasDocument } from "./types";
+import { hasDocument, isFixedRoot } from "./types";
 
 export interface Located {
   node: BinderNode;
@@ -108,6 +108,55 @@ export function insertNode(
     if (current.children.length === 0) return current;
     return { ...current, children: current.children.map(step) };
   });
+}
+
+/** Whether `id` is `ancestorId` itself or sits anywhere beneath it. */
+export function within(roots: BinderNode[], ancestorId: string, id: string): boolean {
+  const ancestor = findNode(roots, ancestorId);
+  if (!ancestor) return false;
+  const holds = (node: BinderNode): boolean => node.id === id || node.children.some(holds);
+  return holds(ancestor);
+}
+
+/**
+ * Whether the item being dragged may land as a child of `parentId`.
+ *
+ * The permanent roots stay put, nothing lands inside itself, nothing becomes
+ * a new root, a chapter stays inside the manuscript (it would silently leave
+ * the compile otherwise), and a reference file can't hold children.
+ */
+export function canDrop(project: Project, draggedId: string, parentId: string): boolean {
+  const dragged = findNode(project.roots, draggedId);
+  const parent = findNode(project.roots, parentId);
+  if (!dragged || !parent || isFixedRoot(dragged)) return false;
+  if (within(project.roots, draggedId, parentId)) return false;
+  if (parent.kind === "reference") return false;
+  if (dragged.kind === "chapter") {
+    return rootContaining(project.roots, parentId)?.id === project.manuscriptRootId;
+  }
+  return true;
+}
+
+/**
+ * Move a node to `index` among the children of `parentId`.
+ *
+ * `index` is a position in the sibling list as it looks before the move —
+ * where a drop indicator sits — so moving lower within the same parent
+ * shifts it down by one to account for the gap the node leaves behind.
+ */
+export function moveNode(
+  roots: BinderNode[],
+  id: string,
+  parentId: string,
+  index: number,
+): BinderNode[] {
+  const found = locate(roots, id);
+  if (!found) return roots;
+  const sameParent = found.parent?.id === parentId;
+  const target = sameParent && found.index < index ? index - 1 : index;
+  const { roots: without, removed } = removeNode(roots, id);
+  if (!removed) return roots;
+  return insertNode(without, parentId, target, removed);
 }
 
 /** Move a node one slot up or down among its siblings. */
