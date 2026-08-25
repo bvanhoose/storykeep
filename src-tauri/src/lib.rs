@@ -5,6 +5,7 @@ mod project;
 mod search;
 mod secrets;
 mod settings;
+mod snapshots;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -164,6 +165,32 @@ fn read_outline(path: String, id: String) -> Result<String> {
 fn write_outline(path: String, id: String, text: String) -> Result<()> {
     let target = project::outline_path(&as_root(&path)?, &id)?;
     project::write_atomic(&target, text.as_bytes())
+}
+
+// ---------------------------------------------------------------------------
+// Snapshots
+// ---------------------------------------------------------------------------
+
+/// The text comes from the window rather than disk, so a snapshot captures
+/// what is on the page even inside the autosave delay.
+#[tauri::command]
+fn take_snapshot(path: String, id: String, text: String) -> Result<snapshots::Snapshot> {
+    snapshots::take(&as_root(&path)?, &id, &text)
+}
+
+#[tauri::command]
+fn list_snapshots(path: String, id: String) -> Result<Vec<snapshots::Snapshot>> {
+    snapshots::list(&as_root(&path)?, &id)
+}
+
+#[tauri::command]
+fn read_snapshot(path: String, id: String, name: String) -> Result<String> {
+    snapshots::read(&as_root(&path)?, &id, &name)
+}
+
+#[tauri::command]
+fn delete_snapshot(path: String, id: String, name: String) -> Result<()> {
+    snapshots::delete(&as_root(&path)?, &id, &name)
 }
 
 /// Remove the files behind items the writer has emptied from the trash. The
@@ -363,6 +390,10 @@ pub fn run() {
             read_outline,
             write_outline,
             purge_nodes,
+            take_snapshot,
+            list_snapshots,
+            read_snapshot,
+            delete_snapshot,
             import_reference,
             reference_full_path,
             manuscript_stats,

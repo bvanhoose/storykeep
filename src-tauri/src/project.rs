@@ -274,7 +274,7 @@ fn collect_included<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
 /// Document ids come from the frontend, so they are never trusted as path
 /// segments. Anything outside `[A-Za-z0-9._-]` is rejected rather than escaped —
 /// every id we generate is a UUID, so a rejection means something is wrong.
-fn safe_id(id: &str) -> Result<&str> {
+pub(crate) fn safe_id(id: &str) -> Result<&str> {
     let ok = !id.is_empty()
         && id.len() <= 128
         && id != "."
@@ -399,6 +399,7 @@ pub fn purge(root: &Path, node: &Node) -> Result<()> {
     if node.kind.has_document() {
         remove_if_present(&content_path(root, &node.id)?)?;
         remove_if_present(&outline_path(root, &node.id)?)?;
+        crate::snapshots::purge(root, &node.id)?;
     }
     if let Some(file) = &node.file {
         remove_if_present(&reference_path(root, file)?)?;
