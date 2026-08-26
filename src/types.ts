@@ -49,6 +49,14 @@ export interface ManuscriptStats {
   documents: number;
 }
 
+/** A dated copy of one document's text, kept under `snapshots/<id>/`. */
+export interface Snapshot {
+  name: string;
+  /** RFC 3339, UTC. */
+  takenAt: string;
+  words: number;
+}
+
 export type SearchSource = "title" | "body" | "outline";
 
 /** One match from project-wide search. Offsets are UTF-16 units, which is

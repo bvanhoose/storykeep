@@ -13,6 +13,7 @@ import type {
   Provider,
   SearchResults,
   Settings,
+  Snapshot,
 } from "./types";
 
 export const api = {
@@ -39,6 +40,15 @@ export const api = {
     invoke<void>("write_outline", { path, id, text }),
   purgeNodes: (path: string, nodes: BinderNode[]) =>
     invoke<void>("purge_nodes", { path, nodes }),
+
+  takeSnapshot: (path: string, id: string, text: string) =>
+    invoke<Snapshot>("take_snapshot", { path, id, text }),
+  listSnapshots: (path: string, id: string) =>
+    invoke<Snapshot[]>("list_snapshots", { path, id }),
+  readSnapshot: (path: string, id: string, name: string) =>
+    invoke<string>("read_snapshot", { path, id, name }),
+  deleteSnapshot: (path: string, id: string, name: string) =>
+    invoke<void>("delete_snapshot", { path, id, name }),
 
   importReference: (path: string, source: string) =>
     invoke<string>("import_reference", { path, source }),

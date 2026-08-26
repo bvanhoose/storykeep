@@ -34,6 +34,7 @@ import {
   type SearchHit,
   type SearchResults,
   type Settings,
+  type Snapshot,
   type TrashedItem,
 } from "./types";
 
@@ -46,6 +47,7 @@ import {
   SettingsDialog,
 } from "./components/Dialogs";
 import { Editor, type Jump } from "./components/Editor";
+import { History } from "./components/History";
 import { Search } from "./components/Search";
 import { Outline, SidePanel, type SideTab } from "./components/SidePanel";
 import { StatusBar } from "./components/StatusBar";
@@ -77,6 +79,10 @@ export default function App() {
   const [searching, setSearching] = useState(false);
   const [searchFocus, setSearchFocus] = useState(0);
   const [jump, setJump] = useState<Jump | null>(null);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  /** Which document `snapshots` was listed for; null until a listing lands. */
+  const [snapshotsFor, setSnapshotsFor] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<{ name: string; text: string } | null>(null);
 
   const { toast, show, dismiss } = useToast();
   const binderWidth = useDraggableWidth("sk.binderWidth", 232, 170, 420);
@@ -89,6 +95,7 @@ export default function App() {
     [project, selectedId],
   );
   const editing = node && hasDocument(node.kind) ? node : null;
+  const editingId = editing?.id ?? null;
 
   // Read through a ref so the callback stays stable: it is passed into the
   // document buffer, and a new identity on every keystroke would churn it.
@@ -515,6 +522,119 @@ export default function App() {
     }
   }, []);
 
+  // --- snapshots ------------------------------------------------------------
+
+  // Refs for the handlers below, which are called from keyboard shortcuts
+  // and from the first keystroke of an edit, where a fresh closure per
+  // keystroke would be wasteful.
+  const bodyRef = useRef("");
+  bodyRef.current = buffer.body;
+  const editingIdRef = useRef<string | null>(null);
+  editingIdRef.current = editingId;
+  const snapshotsRef = useRef<{ id: string | null; list: Snapshot[] }>({ id: null, list: [] });
+  snapshotsRef.current = { id: snapshotsFor, list: snapshots };
+
+  useEffect(() => {
+    setSnapshots([]);
+    setSnapshotsFor(null);
+    setViewing(null);
+    if (!path || !editingId) return;
+    let stale = false;
+    api
+      .listSnapshots(path, editingId)
+      .then((list) => {
+        if (stale) return;
+        setSnapshots(list);
+        setSnapshotsFor(editingId);
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [path, editingId]);
+
+  const takeSnapshot = useCallback(
+    async (text: string = bodyRef.current, quiet = false) => {
+      if (!path || !editingId) return;
+      try {
+        const snap = await api.takeSnapshot(path, editingId, text);
+        if (editingIdRef.current === editingId) setSnapshots((prev) => [snap, ...prev]);
+        if (!quiet) show("Snapshot saved.");
+      } catch (e) {
+        onError(errorMessage(e));
+      }
+    },
+    [path, editingId, show, onError],
+  );
+
+  // The first edit to a document each day snapshots the text as it was
+  // before that edit, so there is always a "this morning" to go back to.
+  // Waits for the listing so it knows whether today already has one.
+  const autoSnapped = useRef(new Set<string>());
+  const editBody = useCallback(
+    (value: string) => {
+      const id = editingIdRef.current;
+      const known = snapshotsRef.current;
+      if (id && known.id === id && !autoSnapped.current.has(id)) {
+        autoSnapped.current.add(id);
+        const today = new Date().toDateString();
+        const already = known.list.some((s) => new Date(s.takenAt).toDateString() === today);
+        const before = bodyRef.current;
+        if (!already && before.trim()) void takeSnapshot(before, true);
+      }
+      buffer.editBody(value);
+    },
+    [buffer.editBody, takeSnapshot],
+  );
+
+  const viewSnapshot = useCallback(
+    async (name: string | null) => {
+      if (!name || !path || !editingId) {
+        setViewing(null);
+        return;
+      }
+      try {
+        const text = await api.readSnapshot(path, editingId, name);
+        if (editingIdRef.current === editingId) setViewing({ name, text });
+      } catch (e) {
+        onError(errorMessage(e));
+      }
+    },
+    [path, editingId, onError],
+  );
+
+  const restoreSnapshot = useCallback(
+    async (name: string) => {
+      if (!path || !editingId) return;
+      try {
+        const text = await api.readSnapshot(path, editingId, name);
+        // The text being replaced becomes a snapshot too, so a restore is
+        // itself something you can come back from.
+        await takeSnapshot(bodyRef.current, true);
+        buffer.editBody(text);
+        setViewing(null);
+        show("Restored. What was on the page is saved as a new snapshot.");
+      } catch (e) {
+        onError(errorMessage(e));
+      }
+    },
+    [path, editingId, takeSnapshot, buffer.editBody, show, onError],
+  );
+
+  const deleteSnapshot = useCallback(
+    async (name: string) => {
+      if (!path || !editingId) return;
+      try {
+        await api.deleteSnapshot(path, editingId, name);
+        setSnapshots((prev) => prev.filter((s) => s.name !== name));
+        setViewing((v) => (v?.name === name ? null : v));
+      } catch (e) {
+        onError(errorMessage(e));
+      }
+    },
+    [path, editingId, onError],
+  );
+
   // --- assistant ------------------------------------------------------------
 
   // The request the panel is currently listening to. Events from any other
@@ -675,6 +795,11 @@ export default function App() {
         openSearch();
         return;
       }
+      if (mod && e.shiftKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void takeSnapshot();
+        return;
+      }
       if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void saveAll();
@@ -697,7 +822,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [focusMode, toggleFocusMode, saveAll, chooseAndOpen, moveSelected, openSearch]);
+  }, [focusMode, toggleFocusMode, saveAll, chooseAndOpen, moveSelected, openSearch, takeSnapshot]);
 
   // --- render ---------------------------------------------------------------
 
@@ -791,7 +916,7 @@ export default function App() {
             settings={settings}
             place={place}
             jump={jump && buffer.loadedId === jump.id ? jump : null}
-            onBodyChange={buffer.editBody}
+            onBodyChange={editBody}
             onTitleChange={(title) => editing && renameNode(editing.id, title)}
           />
 
@@ -816,6 +941,17 @@ export default function App() {
                 focusSeq={searchFocus}
                 onQuery={setSearchQuery}
                 onJump={jumpToHit}
+              />
+            ) : sideTab === "history" ? (
+              <History
+                node={editing}
+                snapshots={snapshots}
+                currentBody={buffer.body}
+                viewing={viewing}
+                onTake={() => void takeSnapshot()}
+                onView={(name) => void viewSnapshot(name)}
+                onRestore={(name) => void restoreSnapshot(name)}
+                onDelete={(name) => void deleteSnapshot(name)}
               />
             ) : (
               <Assistant
