@@ -1,6 +1,7 @@
 mod ai;
 mod error;
 mod export;
+mod progress;
 mod project;
 mod search;
 mod secrets;
@@ -45,6 +46,8 @@ struct OpenedProject {
 struct ManuscriptStats {
     words: usize,
     documents: usize,
+    /// The progress ledger, ascending by date, with today's entry current.
+    days: Vec<progress::Day>,
 }
 
 #[derive(Serialize)]
@@ -237,8 +240,10 @@ fn reference_full_path(path: String, name: String) -> Result<String> {
         .to_string())
 }
 
+/// Count the manuscript and, in the same breath, record the count against
+/// `today` (the window's local date) in the progress ledger.
 #[tauri::command]
-fn manuscript_stats(path: String, project: Project) -> Result<ManuscriptStats> {
+fn manuscript_stats(path: String, project: Project, today: String) -> Result<ManuscriptStats> {
     let root = as_root(&path)?;
     let docs = project.manuscript_documents();
     let mut words = 0;
@@ -246,9 +251,11 @@ fn manuscript_stats(path: String, project: Project) -> Result<ManuscriptStats> {
         let text = project::read_text(&project::content_path(&root, &node.id)?)?;
         words += project::word_count(&text);
     }
+    let days = progress::note(&root, &today, words)?;
     Ok(ManuscriptStats {
         words,
         documents: docs.len(),
+        days,
     })
 }
 

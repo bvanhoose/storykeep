@@ -155,6 +155,18 @@ pub struct Trashed {
     pub deleted_at: String,
 }
 
+/// Word goals. Zero means none set.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Targets {
+    /// Words the finished manuscript should reach.
+    #[serde(default)]
+    pub manuscript: u32,
+    /// Words to add each day.
+    #[serde(default)]
+    pub daily: u32,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -173,6 +185,8 @@ pub struct Project {
     /// searched, counted, or compiled.
     #[serde(default)]
     pub trash: Vec<Trashed>,
+    #[serde(default)]
+    pub targets: Targets,
 }
 
 impl Project {
@@ -196,6 +210,7 @@ impl Project {
                 Node::root(NodeRole::Notes),
             ],
             trash: Vec::new(),
+            targets: Targets::default(),
         }
     }
 
