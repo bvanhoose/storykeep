@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage } from "../api";
 import {
+  localDate,
   PROVIDER_LABELS,
+  type Day,
   type Effort,
   type EditorFont,
   type KeyStatus,
   type Project,
   type Provider,
   type Settings,
+  type Targets,
   type Theme,
 } from "../types";
 
@@ -395,13 +398,22 @@ export function NewProjectDialog({
 interface ProjectDetailsProps {
   project: Project;
   path: string;
-  onSave: (title: string, author: string) => void;
+  /** The progress ledger, for the recent-days strip. */
+  days: Day[];
+  onSave: (title: string, author: string, targets: Targets) => void;
   onClose: () => void;
 }
 
-export function ProjectDetailsDialog({ project, path, onSave, onClose }: ProjectDetailsProps) {
+export function ProjectDetailsDialog({ project, path, days, onSave, onClose }: ProjectDetailsProps) {
   const [title, setTitle] = useState(project.title);
   const [author, setAuthor] = useState(project.author);
+  const [manuscript, setManuscript] = useState(String(project.targets.manuscript || ""));
+  const [daily, setDaily] = useState(String(project.targets.daily || ""));
+
+  const targets = (): Targets => ({
+    manuscript: wholeNumber(manuscript),
+    daily: wholeNumber(daily),
+  });
 
   return (
     <Dialog title="Project details" onClose={onClose}>
@@ -425,6 +437,42 @@ export function ProjectDetailsDialog({ project, path, onSave, onClose }: Project
           onChange={(e) => setAuthor(e.currentTarget.value)}
         />
       </div>
+
+      <div className="menu-label" style={{ padding: "6px 0 8px" }}>
+        Targets
+      </div>
+      <div className="field-row">
+        <div className="field">
+          <label htmlFor="pd-manuscript">Manuscript, in words</label>
+          <input
+            id="pd-manuscript"
+            type="number"
+            min={0}
+            step={1000}
+            value={manuscript}
+            placeholder="90,000"
+            onChange={(e) => setManuscript(e.currentTarget.value)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="pd-daily">Each day, in words</label>
+          <input
+            id="pd-daily"
+            type="number"
+            min={0}
+            step={50}
+            value={daily}
+            placeholder="500"
+            onChange={(e) => setDaily(e.currentTarget.value)}
+          />
+        </div>
+      </div>
+      <p className="field-note" style={{ marginTop: -6, marginBottom: 14 }}>
+        Leave one blank to go without it. Progress shows in the status bar.
+      </p>
+
+      <RecentDays days={days} daily={wholeNumber(daily)} />
+
       <div className="field">
         <label>Folder</label>
         <p className="field-note" style={{ wordBreak: "break-all" }}>
@@ -438,13 +486,64 @@ export function ProjectDetailsDialog({ project, path, onSave, onClose }: Project
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => onSave(title.trim() || project.title, author.trim())}
+          onClick={() => onSave(title.trim() || project.title, author.trim(), targets())}
         >
           Save
         </button>
       </div>
     </Dialog>
   );
+}
+
+/** The last fortnight as a row of bars: words added each day, against the
+ *  daily goal when there is one. Days the project wasn't opened are blank. */
+function RecentDays({ days, daily }: { days: Day[]; daily: number }) {
+  const SPAN = 14;
+  const byDate = new Map(days.map((d) => [d.date, d.end - d.start]));
+  const strip: { date: string; written: number | null }[] = [];
+  for (let back = SPAN - 1; back >= 0; back--) {
+    const date = new Date();
+    date.setDate(date.getDate() - back);
+    const key = localDate(date);
+    strip.push({ date: key, written: byDate.get(key) ?? null });
+  }
+
+  const written = strip.map((d) => d.written ?? 0);
+  const total = written.reduce((sum, n) => sum + Math.max(0, n), 0);
+  const scale = Math.max(daily, ...written, 1);
+  if (total === 0 && days.length === 0) return null;
+
+  return (
+    <div className="field">
+      <label>Last {SPAN} days</label>
+      <div className="days" aria-label="Words written each day">
+        {strip.map((d) => (
+          <span
+            key={d.date}
+            className="day"
+            data-blank={d.written === null ? "true" : undefined}
+            data-met={daily > 0 && (d.written ?? 0) >= daily ? "true" : undefined}
+            data-cut={(d.written ?? 0) < 0 ? "true" : undefined}
+            title={`${d.date}: ${d.written === null ? "not opened" : `${d.written >= 0 ? "+" : "−"}${Math.abs(d.written).toLocaleString()}`}`}
+          >
+            <span
+              className="day-fill"
+              style={{ height: `${(Math.max(0, d.written ?? 0) / scale) * 100}%` }}
+            />
+          </span>
+        ))}
+      </div>
+      <p className="field-note">
+        {total.toLocaleString()} words added over the fortnight.
+        {daily > 0 && ` The line is the daily goal.`}
+      </p>
+    </div>
+  );
+}
+
+function wholeNumber(raw: string): number {
+  const value = Math.floor(Number(raw));
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 // ---------------------------------------------------------------------------

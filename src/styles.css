@@ -1116,6 +1116,33 @@ body[data-dragging="true"] .row {
   color: var(--ink-dim);
 }
 
+.stat[data-tone="cut"] b {
+  color: var(--danger);
+}
+
+/* A thin bar toward a goal, inline after the number it measures. */
+.meter {
+  display: inline-block;
+  vertical-align: middle;
+  width: 46px;
+  height: 3px;
+  margin: 0 0 1px 8px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink-faint);
+  transition: width 240ms ease;
+}
+
+.meter[data-met="true"] .meter-fill {
+  background: var(--brass);
+}
+
 .stat-spacer {
   flex: 1;
 }
@@ -1314,6 +1341,46 @@ body[data-dragging="true"] .row {
 
 .check input {
   accent-color: var(--brass);
+}
+
+/* Fourteen bars, one per day; the goal is the top of the box. */
+.days {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 40px;
+  padding: 0 0 1px;
+  border-bottom: 1px solid var(--line);
+}
+
+.day {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-radius: 2px 2px 0 0;
+}
+
+.day[data-blank="true"] {
+  background: none;
+}
+
+.day-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 1px;
+  background: var(--ink-faint);
+  border-radius: 2px 2px 0 0;
+}
+
+.day[data-met="true"] .day-fill {
+  background: var(--brass);
+}
+
+.day[data-cut="true"] {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
 }
 
 .dialog-actions {

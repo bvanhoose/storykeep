@@ -55,8 +55,9 @@ export const api = {
   referenceFullPath: (path: string, name: string) =>
     invoke<string>("reference_full_path", { path, name }),
 
-  manuscriptStats: (path: string, project: Project) =>
-    invoke<ManuscriptStats>("manuscript_stats", { path, project }),
+  /** `today` is the local date; the count is recorded against it. */
+  manuscriptStats: (path: string, project: Project, today: string) =>
+    invoke<ManuscriptStats>("manuscript_stats", { path, project, today }),
   searchProject: (path: string, project: Project, query: string) =>
     invoke<SearchResults>("search_project", { path, project, query }),
   exportManuscript: (path: string, project: Project, format: string, destination: string) =>

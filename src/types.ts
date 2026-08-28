@@ -27,6 +27,12 @@ export interface TrashedItem {
   deletedAt: string;
 }
 
+/** Word goals. Zero means none set. */
+export interface Targets {
+  manuscript: number;
+  daily: number;
+}
+
 export interface Project {
   schemaVersion: number;
   title: string;
@@ -37,6 +43,7 @@ export interface Project {
   manuscriptRootId: string;
   /** Newest first. Outside the tree: never searched, counted or compiled. */
   trash: TrashedItem[];
+  targets: Targets;
 }
 
 export interface OpenedProject {
@@ -44,9 +51,25 @@ export interface OpenedProject {
   project: Project;
 }
 
+/** One day in the progress ledger: the manuscript count when the day was
+ *  first seen, and the latest count since. */
+export interface Day {
+  date: string;
+  start: number;
+  end: number;
+}
+
 export interface ManuscriptStats {
   words: number;
   documents: number;
+  /** Ascending by date; today's entry is current as of this count. */
+  days: Day[];
+}
+
+/** Today as `YYYY-MM-DD` in local time — the key the progress ledger uses. */
+export function localDate(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 /** A dated copy of one document's text, kept under `snapshots/<id>/`. */

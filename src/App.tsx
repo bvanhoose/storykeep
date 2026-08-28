@@ -24,6 +24,7 @@ import {
   countWords,
   hasDocument,
   isFixedRoot,
+  localDate,
   PROVIDER_LABELS,
   type BinderNode,
   type ChatMessage,
@@ -65,7 +66,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [opened, setOpened] = useState<OpenedProject | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [stats, setStats] = useState<ManuscriptStats>({ words: 0, documents: 0 });
+  const [stats, setStats] = useState<ManuscriptStats>({ words: 0, documents: 0, days: [] });
   const [sideTab, setSideTab] = useState<SideTab>("outline");
   const [focusMode, setFocusMode] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -106,7 +107,7 @@ export default function App() {
     const current = openedRef.current;
     if (!current) return;
     api
-      .manuscriptStats(current.path, current.project)
+      .manuscriptStats(current.path, current.project, localDate())
       .then(setStats)
       .catch(() => undefined);
   }, []);
@@ -179,7 +180,7 @@ export default function App() {
     if (!outstanding) return;
     try {
       await api.saveProjectMeta(outstanding.path, outstanding.project);
-      setStats(await api.manuscriptStats(outstanding.path, outstanding.project));
+      setStats(await api.manuscriptStats(outstanding.path, outstanding.project, localDate()));
     } catch (e) {
       onError(errorMessage(e));
     }
@@ -974,6 +975,7 @@ export default function App() {
             node={editing}
             documentWords={countWords(buffer.body)}
             stats={stats}
+            targets={project.targets}
             saving={buffer.saving}
             savedAt={savedAt}
           />
@@ -1007,8 +1009,9 @@ export default function App() {
         <ProjectDetailsDialog
           project={project}
           path={path}
-          onSave={(title, author) => {
-            commitProject({ ...project, title, author });
+          days={stats.days}
+          onSave={(title, author, targets) => {
+            commitProject({ ...project, title, author, targets });
             setModal(null);
           }}
           onClose={() => setModal(null)}
