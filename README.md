@@ -30,19 +30,35 @@ assistant.
 
 - **Binder** — Manuscript, References, Characters and Notes are permanent:
   they are always there, and they cannot be renamed or deleted. Add your own
-  folders inside them freely. Double-click to rename, `Alt ↑`/`Alt ↓` to
-  reorder, and right-click any item you made for Rename, Delete, and — on a
-  chapter — dropping it from the compile (it goes struck-through and stops
-  counting). Deleting always asks first.
+  folders inside them freely. Drag rows to reorder them or move them into
+  another folder (a chapter stays inside the manuscript, so it can't quietly
+  leave the compile); `Alt ↑`/`Alt ↓` do the same from the keyboard.
+  Double-click to rename, and right-click any item you made for Rename, Move
+  to trash, and — on a chapter — dropping it from the compile (it goes
+  struck-through and stops counting).
+- **Trash** — deleting moves an item to a Trash section at the foot of the
+  binder and offers Undo for a few seconds; its files stay on disk until you
+  right-click and delete it for good, or empty the trash. Those two are the
+  only things that ask first.
 - **Editor** — one document at a time, on a page you can retune (typeface, size,
   line spacing, measure). `Ctrl B` / `Ctrl I` wrap the selection in Markdown
   emphasis.
 - **Ribbon** — the thin brass line down the page's outer edge is a bookmark: the
   bright segment is the chapter you're in, the bead is where you're scrolled to.
 - **Outline** — beats for the open document, saved beside it.
+- **Search** — `Ctrl Shift F` searches every title, document and outline in
+  the project. Results are grouped by document; clicking one opens the
+  document with the match selected and scrolled into view.
+- **History** — dated snapshots of the open document. `Ctrl Shift S` takes
+  one; the first edit each day also takes one of the text as it stood, so
+  there is always a "this morning" to go back to. Pick a snapshot to see
+  what has changed since, then restore it — the text being replaced is
+  snapshotted first, so a restore can itself be undone.
 - **Assistant** — see below.
-- **Status bar** — words in this document, words in the manuscript, and when the
-  last save landed.
+- **Status bar** — words in this document, words in the manuscript, words
+  added today, and when the last save landed. Set a manuscript length and a
+  daily goal in **File → Project details** and thin meters appear beside the
+  numbers, along with a strip of the last fortnight in the dialog.
 
 ### Keyboard
 
@@ -51,6 +67,8 @@ assistant.
 | `Ctrl S` | Save now (it also autosaves after a pause, and when the window loses focus) |
 | `Ctrl O` | Open a project |
 | `Ctrl ,` | Settings |
+| `Ctrl Shift F` | Search the whole project |
+| `Ctrl Shift S` | Take a snapshot of the open document |
 | `Ctrl Shift D` | Distraction-free — hides everything but the page and goes full screen |
 | `Esc` | Leave distraction-free |
 | `Alt ↑` / `Alt ↓` | Move the selected binder item |
@@ -65,11 +83,16 @@ book survives this app.
 
 ```
 The Salt Road.storykeep/
-  project.json        the binder tree, title, author
+  project.json        the binder tree, title, author, targets, and the trash
   content/<id>.md     one Markdown file per chapter, note, or character
   outlines/<id>.md    the outline that sits beside that document
   references/         research files, copied in as-is
+  snapshots/<id>/     dated copies of a document, one Markdown file each
+  progress.json       manuscript word count at the start and end of each day
 ```
+
+A trashed document's files stay where they are; only `project.json` stops
+pointing at them, so nothing is lost until you empty the trash.
 
 Back it up, sync it, put it in git, grep it, open it in any editor.
 
@@ -170,7 +193,8 @@ scripts\windows-build.cmd
 ### Tests
 
 ```sh
-cd src-tauri && cargo test    # path safety, word counting, SSE parsing, export
+cd src-tauri && cargo test    # path safety, word counting, SSE parsing, export,
+                              # search, snapshots, progress, model features
 npx tsc --noEmit              # frontend types
 ```
 
@@ -182,15 +206,20 @@ npx tsc --noEmit              # frontend types
 src/                    React frontend
   App.tsx               state, project lifecycle, keyboard, assistant wiring
   api.ts                the only place that calls into Rust
-  tree.ts               pure binder-tree operations
+  tree.ts               pure binder-tree operations, including move and drop rules
+  diff.ts               line diff for the History tab
   hooks.ts              autosave buffer, toasts, draggable columns
   types.ts              shared shapes; countWords mirrors the Rust version
   styles.css            the whole design system
-  components/           TopBar, Binder, Editor, SidePanel, Assistant, dialogs…
+  components/           TopBar, Binder, Editor, SidePanel, Search, History,
+                        Assistant, dialogs…
 
 src-tauri/src/          Rust backend
   lib.rs                commands and app state
-  project.rs            on-disk format, path safety, word counting
+  project.rs            on-disk format, path safety, word counting, trash purge
+  search.rs             project-wide text search
+  snapshots.rs          dated copies of a document
+  progress.rs           the daily word-count ledger
   ai.rs                 provider layer + streaming Anthropic client
   secrets.rs            keychain with a permissioned-file fallback
   export.rs             compiling to Markdown / text / HTML
@@ -201,12 +230,11 @@ src-tauri/src/          Rust backend
 
 ## Known gaps
 
-- **Reordering is buttons, not drag-and-drop.** `Alt ↑`/`Alt ↓` and the binder
-  footer arrows move an item among its siblings; there's no dragging between
-  folders yet.
-- **No undo across documents.** The editor has the usual per-field undo, but
-  deleting a binder item is not undoable from inside the app (the dialog says
-  so). The files are on disk, so a backup or a git history covers it.
+- **Snapshots are per document.** There is no project-wide history; a
+  reorganisation of the binder isn't captured. The folder is plain files, so
+  git covers that if you want it.
+- **The assistant renders plain text.** Markdown in its replies shows as
+  written, asterisks and all.
 - **Word counts are computed twice** — in TypeScript for the live "words here"
   figure and in Rust for the manuscript total. The two implementations are kept
   in step deliberately; there are tests on the Rust side and a comment on both.
