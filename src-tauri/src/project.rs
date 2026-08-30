@@ -504,6 +504,20 @@ mod tests {
         assert_eq!(word_count("Yes — really."), 2);
     }
 
+    /// The same cases the TypeScript `countWords` is checked against, so the
+    /// two implementations cannot drift apart unnoticed.
+    #[test]
+    fn word_count_matches_the_shared_fixture() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../fixtures/word-count.json")).unwrap();
+        assert!(cases.len() > 10);
+        for case in cases {
+            let text = case["text"].as_str().unwrap();
+            let words = case["words"].as_u64().unwrap() as usize;
+            assert_eq!(word_count(text), words, "{text:?}");
+        }
+    }
+
     #[test]
     fn safe_id_rejects_traversal() {
         assert!(safe_id("../../etc/passwd").is_err());

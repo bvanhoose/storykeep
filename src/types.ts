@@ -156,8 +156,12 @@ export function hasDocument(kind: NodeKind): boolean {
  * Word count for the live editor.
  *
  * Kept deliberately in step with `project::word_count` in
- * `src-tauri/src/project.rs`, which produces the manuscript total. If you
- * change one, change the other — the status bar shows both side by side.
+ * `src-tauri/src/project.rs`, which produces the manuscript total. Both are
+ * tested against `fixtures/word-count.json`, so a change to one fails the
+ * other's tests until it is mirrored.
+ *
+ * `\p{Alphabetic}` rather than `\p{L}`: Rust's `is_alphanumeric` is the
+ * Alphabetic property, which also covers letter-like symbols such as Ⓐ.
  */
 export function countWords(text: string): number {
   let total = 0;
@@ -166,7 +170,7 @@ export function countWords(text: string): number {
     if (trimmed === "") continue;
     if (/^[-*_#]+$/.test(trimmed)) continue;
     for (const word of trimmed.split(/\s+/)) {
-      if (/[\p{L}\p{N}]/u.test(word)) total += 1;
+      if (/[\p{Alphabetic}\p{N}]/u.test(word)) total += 1;
     }
   }
   return total;
