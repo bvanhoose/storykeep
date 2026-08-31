@@ -1,132 +1,48 @@
-export type NodeKind = "folder" | "chapter" | "note" | "character" | "reference";
-
 /**
- * The four permanent top-level folders. Mirrors `NodeRole` in
- * `src-tauri/src/project.rs`, which recreates any that go missing on load.
+ * Shapes shared with the Rust side.
+ *
+ * Everything that crosses the IPC boundary is generated from the Rust
+ * structs by ts-rs into `src/generated/` — run `npm run types` after
+ * changing a `#[ts(export)]` type — and re-exported here so the rest of the
+ * app has one place to import from. Only what the window adds on top of
+ * those shapes is written by hand below.
  */
-export type NodeRole = "manuscript" | "references" | "characters" | "notes";
 
-export interface BinderNode {
-  id: string;
-  title: string;
-  kind: NodeKind;
-  children: BinderNode[];
-  file?: string;
-  url?: string;
-  expanded: boolean;
-  included: boolean;
-  /** Set on the four permanent roots, absent on everything the writer makes. */
-  role?: NodeRole;
-}
+export type { AiDone } from "./generated/AiDone";
+export type { AiError } from "./generated/AiError";
+export type { AiText } from "./generated/AiText";
+export type { BinderNode } from "./generated/BinderNode";
+export type { ChatRequest } from "./generated/ChatRequest";
+export type { ChatTurn } from "./generated/ChatTurn";
+export type { Day } from "./generated/Day";
+export type { EditorFont } from "./generated/EditorFont";
+export type { Effort } from "./generated/Effort";
+export type { KeyBackend } from "./generated/KeyBackend";
+export type { KeyStatus } from "./generated/KeyStatus";
+export type { ManuscriptStats } from "./generated/ManuscriptStats";
+export type { NodeKind } from "./generated/NodeKind";
+export type { NodeRole } from "./generated/NodeRole";
+export type { OpenedProject } from "./generated/OpenedProject";
+export type { Project } from "./generated/Project";
+export type { Provider } from "./generated/Provider";
+export type { SearchHit } from "./generated/SearchHit";
+export type { SearchResults } from "./generated/SearchResults";
+export type { SearchSource } from "./generated/SearchSource";
+export type { Settings } from "./generated/Settings";
+export type { Snapshot } from "./generated/Snapshot";
+export type { Targets } from "./generated/Targets";
+export type { Theme } from "./generated/Theme";
+export type { TrashedItem } from "./generated/TrashedItem";
 
-/** A deleted item, kept so it can be restored. Its files are still on disk. */
-export interface TrashedItem {
-  node: BinderNode;
-  parentId?: string;
-  index: number;
-  deletedAt: string;
-}
+import type { BinderNode } from "./generated/BinderNode";
+import type { ChatTurn } from "./generated/ChatTurn";
+import type { NodeKind } from "./generated/NodeKind";
+import type { Provider } from "./generated/Provider";
 
-/** Word goals. Zero means none set. */
-export interface Targets {
-  manuscript: number;
-  daily: number;
-}
-
-export interface Project {
-  schemaVersion: number;
-  title: string;
-  author: string;
-  created: string;
-  modified: string;
-  roots: BinderNode[];
-  manuscriptRootId: string;
-  /** Newest first. Outside the tree: never searched, counted or compiled. */
-  trash: TrashedItem[];
-  targets: Targets;
-}
-
-export interface OpenedProject {
-  path: string;
-  project: Project;
-}
-
-/** One day in the progress ledger: the manuscript count when the day was
- *  first seen, and the latest count since. */
-export interface Day {
-  date: string;
-  start: number;
-  end: number;
-}
-
-export interface ManuscriptStats {
-  words: number;
-  documents: number;
-  /** Ascending by date; today's entry is current as of this count. */
-  days: Day[];
-}
-
-/** Today as `YYYY-MM-DD` in local time — the key the progress ledger uses. */
-export function localDate(date: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-/** A dated copy of one document's text, kept under `snapshots/<id>/`. */
-export interface Snapshot {
-  name: string;
-  /** RFC 3339, UTC. */
-  takenAt: string;
-  words: number;
-}
-
-export type SearchSource = "title" | "body" | "outline";
-
-/** One match from project-wide search. Offsets are UTF-16 units, which is
- *  what both `String.slice` and the editor's `setSelectionRange` count. */
-export interface SearchHit {
-  id: string;
-  title: string;
-  source: SearchSource;
-  offset: number;
-  length: number;
-  snippet: string;
-  snippetOffset: number;
-  snippetLength: number;
-}
-
-export interface SearchResults {
-  hits: SearchHit[];
-  truncated: boolean;
-}
-
-export type Provider = "anthropic" | "openai" | "gemini" | "local";
-export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
-export type Theme = "system" | "light" | "dark" | "sepia";
-export type EditorFont = "serif" | "sans" | "mono";
-
-export interface Settings {
-  provider: Provider;
-  model: string;
-  effort: Effort;
-  showReasoning: boolean;
-  theme: Theme;
-  editorFont: EditorFont;
-  editorFontSize: number;
-  editorLineHeight: number;
-  editorMeasure: number;
-  spellCheck: boolean;
-  recent: string[];
-}
-
-export interface KeyStatus {
-  configured: boolean;
-  backend: "osKeychain" | "localFile" | null;
-}
-
-export interface ChatMessage {
+/** A turn as the panel keeps it: what was sent, plus what only the window
+ *  cares about. Stripped back to a `ChatTurn` before it reaches Rust. */
+export interface ChatMessage extends ChatTurn {
   role: "user" | "assistant";
-  content: string;
   reasoning?: string;
   /** Set when the turn ended badly, so the panel can style it as a problem. */
   error?: boolean;
@@ -174,4 +90,10 @@ export function countWords(text: string): number {
     }
   }
   return total;
+}
+
+/** Today as `YYYY-MM-DD` in local time — the key the progress ledger uses. */
+export function localDate(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

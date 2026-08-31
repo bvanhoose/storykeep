@@ -9,6 +9,7 @@
 
 use serde::Serialize;
 use std::path::Path;
+use ts_rs::TS;
 
 use crate::error::Result;
 use crate::project::{self, Node, Project};
@@ -20,16 +21,20 @@ const MAX_PER_DOCUMENT: usize = 12;
 /// Characters shown either side of the match in a snippet.
 const CONTEXT: usize = 48;
 
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export, rename = "SearchSource")]
 pub enum Source {
     Title,
     Body,
     Outline,
 }
 
-#[derive(Serialize, Clone, Debug)]
+/// One match. Offsets are UTF-16 units, which is what both `String.slice`
+/// and the editor's `setSelectionRange` count.
+#[derive(Serialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "SearchHit")]
 pub struct Hit {
     pub id: String,
     pub title: String,
@@ -45,8 +50,9 @@ pub struct Hit {
     pub snippet_length: usize,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "SearchResults")]
 pub struct Results {
     pub hits: Vec<Hit>,
     /// True when the caps above cut the list short.

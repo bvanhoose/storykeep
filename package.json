@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "types": "cd src-tauri && cargo test export_bindings",
     "tauri": "tauri",
     "app": "tauri dev",
     "app:build": "tauri build"

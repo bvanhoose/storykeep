@@ -195,8 +195,27 @@ scripts\windows-build.cmd
 ```sh
 cd src-tauri && cargo test    # path safety, word counting, SSE parsing, export,
                               # search, snapshots, progress, model features
+npm test                      # tree operations, the diff, word counting
 npx tsc --noEmit              # frontend types
 ```
+
+Word counting is implemented on both sides on purpose; both test suites run
+the same cases from `fixtures/word-count.json`, so they can't drift apart
+quietly.
+
+### Shared types
+
+Every shape that crosses between Rust and the window — the project, binder
+nodes, settings, search hits, assistant events — is defined once in Rust and
+generated into `src/generated/` by [ts-rs](https://github.com/Aleph-Alpha/ts-rs).
+`src/types.ts` re-exports them. After changing a `#[ts(export)]` type:
+
+```sh
+npm run types                 # cargo test export_bindings, then commit src/generated
+```
+
+The generated files are committed so the frontend builds without a Rust
+toolchain.
 
 ---
 
@@ -209,7 +228,8 @@ src/                    React frontend
   tree.ts               pure binder-tree operations, including move and drop rules
   diff.ts               line diff for the History tab
   hooks.ts              autosave buffer, toasts, draggable columns
-  types.ts              shared shapes; countWords mirrors the Rust version
+  types.ts              re-exports the generated shapes; countWords mirrors Rust
+  generated/            TypeScript for every Rust type on the IPC boundary (ts-rs)
   styles.css            the whole design system
   components/           TopBar, Binder, Editor, SidePanel, Search, History,
                         Assistant, dialogs…

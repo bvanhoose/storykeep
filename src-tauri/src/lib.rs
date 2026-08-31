@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Notify;
+use ts_rs::TS;
 
 use ai::{ChatRequest, Provider};
 use error::{Error, Result};
@@ -34,15 +35,17 @@ impl AppState {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 struct OpenedProject {
     path: String,
     project: Project,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 struct ManuscriptStats {
     words: usize,
     documents: usize,
@@ -50,8 +53,9 @@ struct ManuscriptStats {
     days: Vec<progress::Day>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 struct KeyStatus {
     configured: bool,
     backend: Option<secrets::Backend>,

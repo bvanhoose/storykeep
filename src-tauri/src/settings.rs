@@ -3,26 +3,44 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 
-use crate::ai::Provider;
+use crate::ai::{Effort, Provider};
 use crate::error::Result;
 use crate::project;
 
 const SETTINGS_FILE: &str = "settings.json";
 const MAX_RECENT: usize = 8;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum Theme {
+    System,
+    Light,
+    Dark,
+    Sepia,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum EditorFont {
+    Serif,
+    Sans,
+    Mono,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Settings {
     pub provider: Provider,
     pub model: String,
-    /// low | medium | high | xhigh | max
-    pub effort: String,
+    pub effort: Effort,
     pub show_reasoning: bool,
-    /// system | light | dark | sepia
-    pub theme: String,
-    /// serif | sans | mono
-    pub editor_font: String,
+    pub theme: Theme,
+    pub editor_font: EditorFont,
     pub editor_font_size: u32,
     pub editor_line_height: f32,
     /// Characters per line in the editor column; keeps the measure readable.
@@ -38,10 +56,10 @@ impl Default for Settings {
         Settings {
             provider: Provider::Anthropic,
             model: Provider::Anthropic.default_model().to_string(),
-            effort: "medium".to_string(),
+            effort: Effort::Medium,
             show_reasoning: false,
-            theme: "system".to_string(),
-            editor_font: "serif".to_string(),
+            theme: Theme::System,
+            editor_font: EditorFont::Serif,
             editor_font_size: 18,
             editor_line_height: 1.7,
             editor_measure: 68,

@@ -13,6 +13,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 
 use crate::error::{Error, Result};
 
@@ -29,8 +30,9 @@ pub const SCHEMA_VERSION: u32 = 2;
 /// it, and [`Project::ensure_roots`] puts it back if it ever goes missing.
 /// Identity lives here rather than in the title so the lookup cannot be broken
 /// by a rename or a translation.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export)]
 pub enum NodeRole {
     Manuscript,
     References,
@@ -59,8 +61,9 @@ impl NodeRole {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export)]
 pub enum NodeKind {
     /// A grouping row in the binder. Holds children, has no text of its own.
     Folder,
@@ -81,8 +84,10 @@ impl NodeKind {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// One row of the binder. Exported to TypeScript as `BinderNode`.
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "BinderNode")]
 pub struct Node {
     pub id: String,
     pub title: String,
@@ -91,9 +96,11 @@ pub struct Node {
     pub children: Vec<Node>,
     /// Reference nodes only: file name under `references/`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub file: Option<String>,
     /// Reference nodes only: an external URL.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub url: Option<String>,
     /// Whether the binder shows this folder open.
     #[serde(default = "default_true")]
@@ -105,6 +112,7 @@ pub struct Node {
     /// Set on the four permanent top-level folders, `None` on everything the
     /// writer creates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub role: Option<NodeRole>,
 }
 
@@ -141,14 +149,16 @@ impl Node {
 /// Its files stay exactly where they were under `content/` and `outlines/`;
 /// only the tree forgets it. That makes deletion a pure edit to
 /// `project.json`, restore the reverse, and neither can lose text.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "TrashedItem")]
 pub struct Trashed {
     pub node: Node,
     /// Where it was, so Restore can put it back: the parent it sat under
     /// (`None` at top level, which the binder never allows for a deletion)
     /// and its position among the siblings.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub parent_id: Option<String>,
     #[serde(default)]
     pub index: usize,
@@ -156,8 +166,9 @@ pub struct Trashed {
 }
 
 /// Word goals. Zero means none set.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Targets {
     /// Words the finished manuscript should reach.
     #[serde(default)]
@@ -167,8 +178,9 @@ pub struct Targets {
     pub daily: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Project {
     pub schema_version: u32,
     pub title: String,

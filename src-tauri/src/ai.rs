@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Notify;
+use ts_rs::TS;
 
 use crate::error::{Error, Result};
 
@@ -29,13 +30,26 @@ const ANTHROPIC_VERSION: &str = "2023-06-01";
 const ANTHROPIC_BETA: &str = "server-side-fallback-2026-07-01";
 const MAX_TOKENS: u32 = 16_000;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export)]
 pub enum Provider {
     Anthropic,
     Openai,
     Gemini,
     Local,
+}
+
+/// How hard the model thinks. Maps straight onto the API's effort levels.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export)]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
 }
 
 impl Provider {
@@ -68,55 +82,69 @@ impl Provider {
     }
 }
 
-#[derive(Deserialize, Clone, Debug)]
+/// One turn of the conversation as sent to the provider. The window keeps
+/// richer records (reasoning, error state) and strips them down to this.
+#[derive(Deserialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct ChatMessage {
+#[ts(export)]
+pub struct ChatTurn {
     /// "user" or "assistant".
     pub role: String,
     pub content: String,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct ChatRequest {
     /// Minted by the window and echoed on every event this request emits, so
     /// the panel can ignore anything from a turn it has already abandoned.
     pub request_id: String,
     pub provider: Provider,
     pub model: String,
-    /// low | medium | high | xhigh | max
-    pub effort: String,
+    pub effort: Effort,
     /// Stream a summary of the model's reasoning alongside the answer.
     #[serde(default)]
     pub show_reasoning: bool,
     /// Context assembled by the frontend: the chapter text, outline, selection.
     #[serde(default)]
     pub context: String,
-    pub messages: Vec<ChatMessage>,
+    pub messages: Vec<ChatTurn>,
 }
 
-#[derive(Serialize, Clone, Debug)]
+// Event payloads. Every one names the request it belongs to, so a late
+// event from a stopped or replaced turn can be told apart and dropped.
+
+/// A piece of the answer, or of the reasoning summary.
+#[derive(Serialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-struct TextPayload<'a> {
-    request_id: &'a str,
-    text: &'a str,
+#[ts(export)]
+pub struct AiText {
+    pub request_id: String,
+    pub text: String,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-struct ErrorPayload<'a> {
-    request_id: &'a str,
-    message: String,
+#[ts(export)]
+pub struct AiError {
+    pub request_id: String,
+    pub message: String,
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug, TS)]
 #[serde(rename_all = "camelCase")]
-struct DonePayload<'a> {
-    request_id: &'a str,
-    stop_reason: Option<String>,
-    input_tokens: Option<u64>,
-    output_tokens: Option<u64>,
-    cancelled: bool,
+#[ts(export)]
+pub struct AiDone {
+    pub request_id: String,
+    pub stop_reason: Option<String>,
+    // Token counts fit comfortably in a JavaScript number; ts-rs would
+    // otherwise type u64 as bigint.
+    #[ts(type = "number | null")]
+    pub input_tokens: Option<u64>,
+    #[ts(type = "number | null")]
+    pub output_tokens: Option<u64>,
+    pub cancelled: bool,
 }
 
 /// What a request may carry for a given model.
@@ -212,13 +240,23 @@ pub async fn stream_chat(
     if let Err(e) = &result {
         let _ = app.emit(
             EVENT_ERROR,
-            ErrorPayload {
-                request_id: &req.request_id,
+            AiError {
+                request_id: req.request_id.clone(),
                 message: e.to_string(),
             },
         );
     }
     result
+}
+
+fn emit_text(app: &AppHandle, event: &str, req: &ChatRequest, text: &str) {
+    let _ = app.emit(
+        event,
+        AiText {
+            request_id: req.request_id.clone(),
+            text: text.to_string(),
+        },
+    );
 }
 
 fn emit_done(
@@ -231,8 +269,8 @@ fn emit_done(
 ) {
     let _ = app.emit(
         EVENT_DONE,
-        DonePayload {
-            request_id: &req.request_id,
+        AiDone {
+            request_id: req.request_id.clone(),
             stop_reason,
             input_tokens,
             output_tokens,
@@ -275,10 +313,10 @@ async fn stream_anthropic(
         };
     }
     if features.effort {
-        let effort = if req.effort == "xhigh" && !features.xhigh_effort {
-            "high"
+        let effort = if req.effort == Effort::Xhigh && !features.xhigh_effort {
+            Effort::High
         } else {
-            req.effort.as_str()
+            req.effort
         };
         body["output_config"] = serde_json::json!({ "effort": effort });
     }
@@ -351,25 +389,13 @@ async fn stream_anthropic(
                         Some("text_delta") => {
                             if let Some(text) = delta["text"].as_str() {
                                 got_text = true;
-                                let _ = app.emit(
-                                    EVENT_DELTA,
-                                    TextPayload {
-                                        request_id: &req.request_id,
-                                        text,
-                                    },
-                                );
+                                emit_text(app, EVENT_DELTA, req, text);
                             }
                         }
                         Some("thinking_delta") => {
                             if let Some(text) = delta["thinking"].as_str() {
                                 if !text.is_empty() {
-                                    let _ = app.emit(
-                                        EVENT_REASONING,
-                                        TextPayload {
-                                            request_id: &req.request_id,
-                                            text,
-                                        },
-                                    );
+                                    emit_text(app, EVENT_REASONING, req, text);
                                 }
                             }
                         }

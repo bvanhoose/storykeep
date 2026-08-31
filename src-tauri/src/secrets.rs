@@ -10,14 +10,16 @@
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use ts_rs::TS;
 
 use crate::error::{Error, Result};
 
 const SERVICE: &str = "com.storykeep.app";
 const FALLBACK_FILE: &str = "credentials.json";
 
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, rename = "KeyBackend")]
 pub enum Backend {
     /// Windows Credential Manager / Secret Service / Keychain.
     OsKeychain,

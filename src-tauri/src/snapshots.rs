@@ -11,14 +11,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use time::macros::format_description;
 use time::OffsetDateTime;
+use ts_rs::TS;
 
 use crate::error::{Error, Result};
 use crate::project::{self, safe_id};
 
 pub const SNAPSHOT_DIR: &str = "snapshots";
 
-#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+/// A dated copy of one document's text.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Snapshot {
     /// File name under `snapshots/<id>/`, e.g. `2026-08-27T09-13-05Z.md`.
     pub name: String,

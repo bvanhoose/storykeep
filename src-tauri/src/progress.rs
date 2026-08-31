@@ -12,6 +12,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use ts_rs::TS;
 
 use crate::error::{Error, Result};
 use crate::project;
@@ -20,8 +21,10 @@ pub const PROGRESS_FILE: &str = "progress.json";
 /// Days kept before the oldest are dropped.
 const KEEP_DAYS: usize = 120;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+/// One day in the progress ledger.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export)]
 pub struct Day {
     /// Local calendar date, `YYYY-MM-DD`.
     pub date: String,

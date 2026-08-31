@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "StoryKeep — a focused writing environment for long-form fiction"
 authors = ["StoryKeep"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.78"
 
 [lib]
 name = "storykeep_lib"
@@ -30,6 +30,7 @@ keyring = { version = "3", features = ["windows-native", "sync-secret-service", 
 uuid = { version = "1", features = ["v4"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
 thiserror = "2"
+ts-rs = { version = "12", features = ["serde-compat"] }
 
 [profile.release]
 codegen-units = 1

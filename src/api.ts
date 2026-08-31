@@ -3,8 +3,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AiDone,
+  AiError,
+  AiText,
   BinderNode,
   ChatMessage,
+  ChatRequest,
   KeyStatus,
   ManuscriptStats,
   NodeKind,
@@ -67,46 +71,20 @@ export const api = {
 
   newNode: (title: string, kind: NodeKind) => invoke<BinderNode>("new_node", { title, kind }),
 
-  aiSend: (request: {
-    requestId: string;
-    provider: Provider;
-    model: string;
-    effort: string;
-    showReasoning: boolean;
-    context: string;
-    messages: ChatMessage[];
-  }) =>
-    invoke<void>("ai_send", {
-      request: {
-        ...request,
-        // Strip UI-only fields before they reach the provider.
-        messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
-      },
-    }),
+  aiSend: (request: Omit<ChatRequest, "messages"> & { messages: ChatMessage[] }) => {
+    // Strip UI-only fields before they reach the provider.
+    const wire: ChatRequest = {
+      ...request,
+      messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+    };
+    return invoke<void>("ai_send", { request: wire });
+  },
   aiCancel: () => invoke<void>("ai_cancel"),
 };
 
-/** Every assistant event names the request it belongs to, so a late event
- *  from a turn that was stopped or replaced can be told apart and dropped. */
-export interface AiText {
-  requestId: string;
-  text: string;
-}
-
-export interface AiDone {
-  requestId: string;
-  stopReason: string | null;
-  inputTokens: number | null;
-  outputTokens: number | null;
-  cancelled: boolean;
-}
-
-export interface AiError {
-  requestId: string;
-  message: string;
-}
-
-/** Subscribe to the assistant's stream. Returns a single unsubscribe function. */
+/** Subscribe to the assistant's stream. Returns a single unsubscribe function.
+ *  Every event names the request it belongs to, so a late event from a turn
+ *  that was stopped or replaced can be told apart and dropped. */
 export async function listenToAssistant(handlers: {
   onDelta: (delta: AiText) => void;
   onReasoning: (delta: AiText) => void;
