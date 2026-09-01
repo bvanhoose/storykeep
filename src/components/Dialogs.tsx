@@ -87,7 +87,10 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsDialogPr
     api
       .keyStatus(provider)
       .then(setKeyStatus)
-      .catch(() => setKeyStatus(null));
+      .catch((e) => {
+        setKeyStatus(null);
+        setError(`Could not check for a saved key: ${errorMessage(e)}`);
+      });
   }, [provider]);
 
   const patch = (change: Partial<Settings>) => onChange({ ...settings, ...change });

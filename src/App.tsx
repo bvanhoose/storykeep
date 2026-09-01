@@ -103,14 +103,26 @@ export default function App() {
   const openedRef = useRef<OpenedProject | null>(null);
   openedRef.current = opened;
 
+  // A count that fails means a chapter file could not be read, which is
+  // worth saying — but it recurs on every save until fixed, so it is said
+  // once per distinct message rather than after every pause in typing.
+  const lastStatsError = useRef<string | null>(null);
   const refreshStats = useCallback(() => {
     const current = openedRef.current;
     if (!current) return;
     api
       .manuscriptStats(current.path, current.project, localDate())
-      .then(setStats)
-      .catch(() => undefined);
-  }, []);
+      .then((next) => {
+        lastStatsError.current = null;
+        setStats(next);
+      })
+      .catch((e) => {
+        const message = errorMessage(e);
+        if (lastStatsError.current === message) return;
+        lastStatsError.current = message;
+        show(`The word count could not be updated: ${message}`, "error");
+      });
+  }, [show]);
 
   const onDocSaved = useCallback(() => {
     setSavedAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
@@ -133,10 +145,15 @@ export default function App() {
       .catch((e) => onError(errorMessage(e)));
   }, [onError]);
 
-  const patchSettings = useCallback((next: Settings) => {
-    setSettings(next);
-    api.saveSettings(next).catch(() => undefined);
-  }, []);
+  const patchSettings = useCallback(
+    (next: Settings) => {
+      setSettings(next);
+      api
+        .saveSettings(next)
+        .catch((e) => onError(`Your settings could not be saved: ${errorMessage(e)}`));
+    },
+    [onError],
+  );
 
   useEffect(() => {
     if (!settings) return;
@@ -226,6 +243,7 @@ export default function App() {
         try {
           await saveAll();
         } finally {
+          // If destroy itself fails there is no window left to tell.
           await win.destroy().catch(() => undefined);
         }
       })
@@ -556,11 +574,11 @@ export default function App() {
         setSnapshots(list);
         setSnapshotsFor(editingId);
       })
-      .catch(() => undefined);
+      .catch((e) => !stale && onError(`Could not list snapshots: ${errorMessage(e)}`));
     return () => {
       stale = true;
     };
-  }, [path, editingId]);
+  }, [path, editingId, onError]);
 
   const takeSnapshot = useCallback(
     async (text: string = bodyRef.current, quiet = false) => {
@@ -753,8 +771,8 @@ export default function App() {
   const stopAssistant = useCallback(() => {
     activeRequest.current = null;
     setStreaming(false);
-    void api.aiCancel();
-  }, []);
+    api.aiCancel().catch((e) => onError(errorMessage(e)));
+  }, [onError]);
 
   // Remember the last passage highlighted in the editor, so the assistant can
   // still act on it after focus moves to the composer.
@@ -780,6 +798,8 @@ export default function App() {
   // updater: React may run an updater more than once (it does under
   // StrictMode), and a side effect there would toggle fullscreen twice.
   useEffect(() => {
+    // Fullscreen is a nicety on top of focus mode: the chrome is hidden by
+    // the flag regardless, so a window manager refusing is nothing to report.
     void getCurrentWindow()
       .setFullscreen(focusMode)
       .catch(() => undefined);
@@ -870,7 +890,7 @@ export default function App() {
           onOpen={() => void chooseAndOpen()}
           onOpenRecent={(p) => void openProjectAt(p)}
           onForget={(p) => {
-            void api.forgetProject(p);
+            api.forgetProject(p).catch((e) => onError(errorMessage(e)));
             patchSettings({ ...settings, recent: settings.recent.filter((r) => r !== p) });
           }}
         />
