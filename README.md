@@ -165,6 +165,11 @@ workaround if your setup renders fine without it.
 npm run app:build
 ```
 
+On Windows, `build.cmd` at the repo root does the same and can be
+double-clicked; it holds the window open at the end and offers to launch the
+fresh exe. From a terminal, `build dev` starts the hot-reloading dev build
+instead and `build check` runs the lint and test pipeline without building.
+
 Installers land in `src-tauri/target/release/bundle/`:
 
 - **Windows** — `.msi` and an NSIS `.exe`
@@ -183,11 +188,11 @@ To get a Windows installer, copy the source across and build it there:
 The sync leaves out `node_modules`, `src-tauri/target`, `dist` and
 `src-tauri/gen` — they hold Linux binaries that would break a Windows build —
 and it doesn't touch whatever npm and cargo have already put on the Windows
-side, so re-syncing after an edit is quick. Then, from a Windows terminal in
-`D:\Projects\storykeep`:
+side, so re-syncing after an edit is quick. Then double-click `build.cmd` in
+`D:\Projects\storykeep`, or from a terminal there:
 
 ```bat
-scripts\windows-build.cmd
+build
 ```
 
 ### Tests

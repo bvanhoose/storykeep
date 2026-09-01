@@ -1,0 +1,4 @@
+# cmd.exe misreads goto labels in batch files with LF endings; keep them CRLF
+# whatever the checkout settings are. Everything else stays LF.
+* text=auto eol=lf
+*.cmd text eol=crlf

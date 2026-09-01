@@ -73,8 +73,8 @@ cat <<EOF
 
 Copied. On Windows, open a terminal in $WIN_PATH and run:
 
-    scripts\\windows-build.cmd      to build the installer
-    npm install && npm run app     to work on it there instead
+    build                          to build the exe and installers
+    build dev                      to work on it there instead
 
 The first Windows build downloads the npm and cargo dependencies again — that
 one takes a while. Later syncs reuse them.
