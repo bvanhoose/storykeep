@@ -9,6 +9,22 @@ assistant.
 
 ---
 
+## Installing
+
+You don't need any developer tools to use StoryKeep. Grab the newest installer
+from the [Releases page](https://github.com/bvanhoose/storykeep/releases/latest):
+
+- **Windows** — the `…-setup.exe`. Windows will show "Windows protected your
+  PC" the first time, because the installer isn't code-signed: click **More
+  info**, then **Run anyway**. That happens once per fresh install.
+- **Linux** — the `.AppImage`, `.deb` or `.rpm`, whichever your distribution
+  prefers.
+
+Once installed, StoryKeep checks for a newer release each time it starts and
+offers to update itself, so there is no need to come back here.
+
+---
+
 ## What's in the window
 
 ```
@@ -194,6 +210,24 @@ side, so re-syncing after an edit is quick. Then double-click `build.cmd` in
 ```bat
 build
 ```
+
+### Releasing
+
+Releases are built by GitHub Actions, not on a laptop. To cut one:
+
+1. Set the same new version in `package.json`, `src-tauri/Cargo.toml` and
+   `src-tauri/tauri.conf.json`, and commit it.
+2. Tag the commit and push the tag:
+
+   ```sh
+   git tag v0.2.0
+   git push origin main v0.2.0
+   ```
+
+3. The **Release** workflow builds the Windows and Linux installers on
+   GitHub's runners — ten to twenty minutes — and attaches them to a release
+   named after the tag. Nothing runs on ordinary pushes, so this costs
+   nothing on a public repository.
 
 ### Tests
 
