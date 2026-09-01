@@ -1,3 +1,13 @@
+//! The Tauri commands and the little state the app keeps.
+//!
+//! The window owns the project. `AppState` holds only what is app-wide —
+//! the config folder, the key store, the assistant request in flight — and
+//! nothing about the open book. A command that needs the binder tree is
+//! handed it by the window as an argument, so there is one copy of the
+//! tree and no way for the two sides to disagree about it. Document text is
+//! read and written by id, never cached here. See `src/api.ts` for the
+//! same rule from the window's side.
+
 mod ai;
 mod error;
 mod export;

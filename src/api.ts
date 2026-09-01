@@ -1,5 +1,18 @@
-/** Typed wrappers around the Rust commands. The rest of the app never calls
- *  `invoke` directly, so the boundary is in one place. */
+/**
+ * Typed wrappers around the Rust commands. The rest of the app never calls
+ * `invoke` directly, so the boundary is in one place.
+ *
+ * Who owns what: the window owns the binder tree between saves, and the
+ * Rust side keeps no project state at all. Commands that need the tree —
+ * the word count, search, export — take the whole `Project` as an argument
+ * rather than holding a copy of their own. That is deliberate: there is
+ * exactly one copy of the tree, so nothing can go stale, and every command
+ * is a function of its arguments and the disk. The cost is that the tree
+ * crosses the IPC boundary on those calls; a binder is a few kilobytes of
+ * JSON, which is noise beside the chapter files those commands then read.
+ * Document text is the exception: it is read and written by id and never
+ * held on both sides.
+ */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {

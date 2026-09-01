@@ -219,6 +219,18 @@ toolchain.
 
 ---
 
+## Where state lives
+
+The window owns the project. The binder tree lives in React state between
+saves; the Rust side holds nothing about the open book, only app-wide things
+like the config folder and the assistant request in flight. Commands that
+need the tree — the word count, search, export — are handed it as an
+argument, so there is one copy of the tree and no way for the two sides to
+disagree about it. That means the tree crosses the IPC boundary on those
+calls, which is a few kilobytes of JSON next to the chapter files they then
+read. Document text is the exception: it is read and written by id and never
+held on both sides.
+
 ## Layout of the source
 
 ```
