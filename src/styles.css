@@ -1459,6 +1459,17 @@ body[data-dragging="true"] .row {
   color: var(--brass-bright);
 }
 
+.toast-close {
+  margin-left: 12px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-faint);
+}
+
+.toast-close:hover {
+  color: var(--ink);
+}
+
 /* --- scrollbars ----------------------------------------------------------- */
 
 ::-webkit-scrollbar {

@@ -48,10 +48,17 @@ jobs:
 
       - run: npm ci
 
+      # The updater artifacts (the installer's .sig files and latest.json)
+      # are signed with the private half of the key whose public half sits in
+      # tauri.conf.json. They are only produced here — tauri.ci.conf.json
+      # switches them on — so a local `build.cmd` works without the key.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          args: --config src-tauri/tauri.ci.conf.json
           tagName: ${{ github.ref_name }}
           releaseName: "StoryKeep ${{ github.ref_name }}"
           releaseBody: |

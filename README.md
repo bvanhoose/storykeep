@@ -226,8 +226,28 @@ Releases are built by GitHub Actions, not on a laptop. To cut one:
 
 3. The **Release** workflow builds the Windows and Linux installers on
    GitHub's runners — ten to twenty minutes — and attaches them to a release
-   named after the tag. Nothing runs on ordinary pushes, so this costs
-   nothing on a public repository.
+   named after the tag, along with `latest.json`, which installed copies
+   read to learn that a newer version exists. Nothing runs on ordinary
+   pushes, so this costs nothing on a public repository.
+
+**Self-update signing, once per repository.** Installed copies only accept
+an update whose signature matches the public key in `tauri.conf.json`. The
+workflow signs with the private half, which it reads from a repository
+secret. Generate a keypair and store it:
+
+```sh
+npx tauri signer generate -w ~/.tauri/storykeep.key --ci
+gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/storykeep.key
+```
+
+Then put the contents of `storykeep.key.pub` into `plugins.updater.pubkey`
+in `tauri.conf.json`. If you gave the key a password, store that too as
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Keep the private key somewhere safe:
+lose it and existing installs can never accept another update, since they
+trust only the public key they were built with.
+
+A local `build.cmd` release does not sign anything and does not need the
+key; only the workflow produces updater artifacts.
 
 ### Tests
 

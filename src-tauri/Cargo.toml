@@ -1,6 +1,6 @@
 [package]
 name = "storykeep"
-version = "0.1.0"
+version = "0.2.0"
 description = "StoryKeep — a focused writing environment for long-form fiction"
 authors = ["StoryKeep"]
 edition = "2021"
@@ -31,6 +31,8 @@ uuid = { version = "1", features = ["v4"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
 thiserror = "2"
 ts-rs = { version = "12", features = ["serde-compat"] }
+tauri-plugin-updater = "2.11.0"
+tauri-plugin-process = "2.3.1"
 
 [profile.release]
 codegen-units = 1

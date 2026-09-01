@@ -165,6 +165,8 @@ export interface Toast {
   tone: "info" | "error";
   /** One button beside the text — an Undo, typically. Keeps the toast up longer. */
   action?: ToastAction;
+  /** Stays until dismissed or replaced: for an offer the writer should not miss. */
+  sticky?: boolean;
 }
 
 export function useToast() {
@@ -172,9 +174,10 @@ export function useToast() {
   const timer = useRef<number | undefined>(undefined);
 
   const show = useCallback(
-    (text: string, tone: "info" | "error" = "info", action?: ToastAction) => {
-      setToast({ text, tone, action });
+    (text: string, tone: "info" | "error" = "info", action?: ToastAction, sticky = false) => {
+      setToast({ text, tone, action, sticky });
       window.clearTimeout(timer.current);
+      if (sticky) return;
       const ttl = action ? 8000 : tone === "error" ? 7000 : 3200;
       timer.current = window.setTimeout(() => setToast(null), ttl);
     },

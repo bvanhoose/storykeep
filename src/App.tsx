@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { api, errorMessage, listenToAssistant } from "./api";
 import { useDocumentBuffer, useDraggableWidth, useToast } from "./hooks";
+import { checkForUpdate } from "./updater";
 import {
   allDocuments,
   breadcrumb,
@@ -179,6 +180,48 @@ export default function App() {
       .then((status) => setKeyReady(status.configured))
       .catch(() => setKeyReady(false));
   }, [provider, modal]);
+
+  // --- updates --------------------------------------------------------------
+
+  // One check shortly after launch. A check that fails is logged rather than
+  // shown: it fails on every offline start, and there is nothing the writer
+  // can do about it. Skipped in development, where the running build is not
+  // a release and the feed would only offer to replace it.
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
+    let dead = false;
+    checkForUpdate()
+      .then((update) => {
+        if (dead || !update) return;
+        show(
+          `StoryKeep ${update.version} is ready to install.`,
+          "info",
+          {
+            label: "Update and restart",
+            onClick: () => {
+              show("Downloading the update…", "info", undefined, true);
+              update
+                .install((fraction) => {
+                  if (fraction !== null) {
+                    show(
+                      `Downloading the update… ${Math.round(fraction * 100)}%`,
+                      "info",
+                      undefined,
+                      true,
+                    );
+                  }
+                })
+                .catch((e) => onError(`The update could not be installed: ${errorMessage(e)}`));
+            },
+          },
+          true,
+        );
+      })
+      .catch((e) => console.info("Update check skipped:", errorMessage(e)));
+    return () => {
+      dead = true;
+    };
+  }, [show, onError]);
 
   // --- project --------------------------------------------------------------
 
@@ -1068,11 +1111,17 @@ export default function App() {
               type="button"
               className="toast-action"
               onClick={() => {
-                toast.action?.onClick();
+                // Dismiss first: the action may put up a toast of its own.
                 dismiss();
+                toast.action?.onClick();
               }}
             >
               {toast.action.label}
+            </button>
+          )}
+          {toast.sticky && (
+            <button type="button" className="toast-close" aria-label="Dismiss" onClick={dismiss}>
+              ×
             </button>
           )}
         </div>
