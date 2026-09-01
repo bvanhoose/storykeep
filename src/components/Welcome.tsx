@@ -12,8 +12,8 @@ export function Welcome({ recent, onNew, onOpen, onOpenRecent, onForget }: Welco
       <div className="welcome-inner">
         <h1>StoryKeep</h1>
         <p>
-          Your manuscript, your research, and your outline in one window. Everything lives in
-          a plain folder on disk, so the book is still yours if this app disappears.
+          Your manuscript, your research, and your outline in one window. Everything lives in a
+          plain folder on disk, so the book is still yours if this app disappears.
         </p>
 
         <div className="welcome-actions">
@@ -32,11 +32,7 @@ export function Welcome({ recent, onNew, onOpen, onOpenRecent, onForget }: Welco
             </div>
             {recent.map((path) => (
               <div key={path} style={{ display: "flex", alignItems: "center" }}>
-                <button
-                  type="button"
-                  className="recent-item"
-                  onClick={() => onOpenRecent(path)}
-                >
+                <button type="button" className="recent-item" onClick={() => onOpenRecent(path)}>
                   <span className="recent-name">{projectName(path)}</span>
                   <span className="recent-path">{path}</span>
                 </button>

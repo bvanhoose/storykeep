@@ -563,7 +563,10 @@ mod tests {
     fn frontier_models_get_fallbacks() {
         for model in ["claude-opus-5", "claude-fable-5-1", "claude-mythos-5-1"] {
             let f = features_for(model);
-            assert!(f.adaptive_thinking && f.effort && f.xhigh_effort && f.fallbacks, "{model}");
+            assert!(
+                f.adaptive_thinking && f.effort && f.xhigh_effort && f.fallbacks,
+                "{model}"
+            );
         }
     }
 
@@ -612,6 +615,9 @@ mod tests {
     #[test]
     fn decoder_skips_comment_and_ping_events() {
         let mut d = SseDecoder::default();
-        assert_eq!(d.push(": keep-alive\n\nevent: ping\n\ndata: 1\n\n"), vec!["1"]);
+        assert_eq!(
+            d.push(": keep-alive\n\nevent: ping\n\ndata: 1\n\n"),
+            vec!["1"]
+        );
     }
 }

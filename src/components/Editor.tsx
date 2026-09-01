@@ -51,7 +51,8 @@ export function Editor({
     el.focus({ preventScroll: true });
     el.setSelectionRange(jump.offset, jump.offset + jump.length);
     const withinArea = caretTop(el, jump.offset);
-    const areaTop = el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop;
+    const areaTop =
+      el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop;
     page.scrollTo({ top: Math.max(0, areaTop + withinArea - page.clientHeight * 0.35) });
   }, [jump, node, body]);
 

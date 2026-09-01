@@ -120,11 +120,17 @@ export default function App() {
   const onError = useCallback((message: string) => show(message, "error"), [show]);
 
   const buffer = useDocumentBuffer(path, editing?.id ?? null, onDocSaved, onError);
+  // The buffer object is new each render; its functions are stable. Pull
+  // them out so hooks below can depend on exactly what they call.
+  const { flush: flushDocument, editBody: editDocumentBody } = buffer;
 
   // --- settings -------------------------------------------------------------
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch((e) => onError(errorMessage(e)));
+    api
+      .getSettings()
+      .then(setSettings)
+      .catch((e) => onError(errorMessage(e)));
   }, [onError]);
 
   const patchSettings = useCallback((next: Settings) => {
@@ -199,8 +205,8 @@ export default function App() {
 
   /** Write everything outstanding: the open document, its outline, the tree. */
   const saveAll = useCallback(
-    () => Promise.all([buffer.flush(), flushMeta()]).then(() => undefined),
-    [buffer.flush, flushMeta],
+    () => Promise.all([flushDocument(), flushMeta()]).then(() => undefined),
+    [flushDocument, flushMeta],
   );
 
   // Closing the window is the one exit the autosave delay can't see coming.
@@ -434,7 +440,9 @@ export default function App() {
           path,
           items.map((i) => i.node),
         );
-        show(items.length === 1 ? `Deleted “${items[0].node.title}” for good.` : "Emptied the trash.");
+        show(
+          items.length === 1 ? `Deleted “${items[0].node.title}” for good.` : "Emptied the trash.",
+        );
       } catch (e) {
         onError(errorMessage(e));
       }
@@ -496,7 +504,7 @@ export default function App() {
     setSearching(true);
     const timer = window.setTimeout(async () => {
       try {
-        await buffer.flush();
+        await flushDocument();
         const results = await api.searchProject(path, project, query);
         if (seq === searchSeq.current) setSearchResults(results);
       } catch (e) {
@@ -506,7 +514,7 @@ export default function App() {
       }
     }, 180);
     return () => window.clearTimeout(timer);
-  }, [path, project, searchQuery, buffer.flush, onError]);
+  }, [path, project, searchQuery, flushDocument, onError]);
 
   const openSearch = useCallback(() => {
     setSideTab("search");
@@ -583,9 +591,9 @@ export default function App() {
         const before = bodyRef.current;
         if (!already && before.trim()) void takeSnapshot(before, true);
       }
-      buffer.editBody(value);
+      editDocumentBody(value);
     },
-    [buffer.editBody, takeSnapshot],
+    [editDocumentBody, takeSnapshot],
   );
 
   const viewSnapshot = useCallback(
@@ -612,14 +620,14 @@ export default function App() {
         // The text being replaced becomes a snapshot too, so a restore is
         // itself something you can come back from.
         await takeSnapshot(bodyRef.current, true);
-        buffer.editBody(text);
+        editDocumentBody(text);
         setViewing(null);
         show("Restored. What was on the page is saved as a new snapshot.");
       } catch (e) {
         onError(errorMessage(e));
       }
     },
-    [path, editingId, takeSnapshot, buffer.editBody, show, onError],
+    [path, editingId, takeSnapshot, editDocumentBody, show, onError],
   );
 
   const deleteSnapshot = useCallback(

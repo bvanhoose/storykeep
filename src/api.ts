@@ -42,13 +42,11 @@ export const api = {
   readOutline: (path: string, id: string) => invoke<string>("read_outline", { path, id }),
   writeOutline: (path: string, id: string, text: string) =>
     invoke<void>("write_outline", { path, id, text }),
-  purgeNodes: (path: string, nodes: BinderNode[]) =>
-    invoke<void>("purge_nodes", { path, nodes }),
+  purgeNodes: (path: string, nodes: BinderNode[]) => invoke<void>("purge_nodes", { path, nodes }),
 
   takeSnapshot: (path: string, id: string, text: string) =>
     invoke<Snapshot>("take_snapshot", { path, id, text }),
-  listSnapshots: (path: string, id: string) =>
-    invoke<Snapshot[]>("list_snapshots", { path, id }),
+  listSnapshots: (path: string, id: string) => invoke<Snapshot[]>("list_snapshots", { path, id }),
   readSnapshot: (path: string, id: string, name: string) =>
     invoke<string>("read_snapshot", { path, id, name }),
   deleteSnapshot: (path: string, id: string, name: string) =>

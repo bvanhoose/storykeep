@@ -123,7 +123,10 @@ fn create_project(
     let (root, proj) = project::create(Path::new(&parent), name)?;
     let path = root.to_string_lossy().to_string();
     remember(&state, &path);
-    Ok(OpenedProject { path, project: proj })
+    Ok(OpenedProject {
+        path,
+        project: proj,
+    })
 }
 
 #[tauri::command]
@@ -131,7 +134,10 @@ fn open_project(state: State<'_, AppState>, path: String) -> Result<OpenedProjec
     let root = as_root(&path)?;
     let proj = project::load(&root)?;
     remember(&state, &path);
-    Ok(OpenedProject { path, project: proj })
+    Ok(OpenedProject {
+        path,
+        project: proj,
+    })
 }
 
 fn remember(state: &State<'_, AppState>, path: &str) {
@@ -296,11 +302,7 @@ fn suggested_export_name(project: Project, format: String) -> String {
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-async fn ai_send(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    request: ChatRequest,
-) -> Result<()> {
+async fn ai_send(app: AppHandle, state: State<'_, AppState>, request: ChatRequest) -> Result<()> {
     let key = state.secrets.get(request.provider.key())?.ok_or_else(|| {
         Error::Invalid(format!(
             "No {} API key yet. Add one in Settings.",

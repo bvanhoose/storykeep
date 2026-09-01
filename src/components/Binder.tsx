@@ -150,9 +150,7 @@ export function Binder({
               <MenuItem onSelect={() => (close(), onAdd("character"))}>Character</MenuItem>
               <MenuItem onSelect={() => (close(), onAdd("note"))}>Note</MenuItem>
               <MenuSeparator />
-              <MenuItem onSelect={() => (close(), onImportReference())}>
-                Reference file…
-              </MenuItem>
+              <MenuItem onSelect={() => (close(), onImportReference())}>Reference file…</MenuItem>
             </>
           )}
         </Menu>
@@ -194,9 +192,7 @@ export function Binder({
           {(close) => (
             <>
               <MenuLabel>{menu.target.title}</MenuLabel>
-              <MenuItem onSelect={() => (close(), setRenaming(menu.target.id))}>
-                Rename
-              </MenuItem>
+              <MenuItem onSelect={() => (close(), setRenaming(menu.target.id))}>Rename</MenuItem>
               {menu.target.kind === "chapter" && (
                 <MenuItem onSelect={() => (close(), onToggleIncluded(menu.target.id))}>
                   {menu.target.included ? "Exclude from compile" : "Include in compile"}

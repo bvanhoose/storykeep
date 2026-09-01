@@ -80,7 +80,10 @@ pub enum NodeKind {
 impl NodeKind {
     /// Whether this kind owns a Markdown body under `content/`.
     pub fn has_document(self) -> bool {
-        matches!(self, NodeKind::Chapter | NodeKind::Note | NodeKind::Character)
+        matches!(
+            self,
+            NodeKind::Chapter | NodeKind::Note | NodeKind::Character
+        )
     }
 }
 
@@ -206,7 +209,9 @@ impl Project {
         let now = now_iso();
 
         let mut manuscript = Node::root(NodeRole::Manuscript);
-        manuscript.children.push(Node::new("Chapter 1", NodeKind::Chapter));
+        manuscript
+            .children
+            .push(Node::new("Chapter 1", NodeKind::Chapter));
 
         Project {
             schema_version: SCHEMA_VERSION,
@@ -252,7 +257,11 @@ impl Project {
             }
         }
         // Keep the compile target pointed at the manuscript fixture.
-        if let Some(root) = self.roots.iter().find(|r| r.role == Some(NodeRole::Manuscript)) {
+        if let Some(root) = self
+            .roots
+            .iter()
+            .find(|r| r.role == Some(NodeRole::Manuscript))
+        {
             self.manuscript_root_id = root.id.clone();
         }
     }
@@ -335,7 +344,9 @@ fn safe_reference_name(name: &str) -> Result<&str> {
         && name != "."
         && name != ".."
         && name.trim() == name
-        && !name.chars().any(|c| r#"<>:"/\|?*"#.contains(c) || c.is_control());
+        && !name
+            .chars()
+            .any(|c| r#"<>:"/\|?*"#.contains(c) || c.is_control());
     if ok {
         Ok(name)
     } else {
@@ -355,10 +366,7 @@ pub fn create(parent: &Path, name: &str) -> Result<(PathBuf, Project)> {
     let folder_name = format!("{}.{}", sanitize_file_name(name), PROJECT_EXT);
     let root = parent.join(folder_name);
     if root.exists() {
-        return Err(Error::Invalid(format!(
-            "{} already exists",
-            root.display()
-        )));
+        return Err(Error::Invalid(format!("{} already exists", root.display())));
     }
     fs::create_dir_all(root.join(CONTENT_DIR))?;
     fs::create_dir_all(root.join(OUTLINE_DIR))?;
@@ -461,7 +469,13 @@ pub fn read_text(path: &Path) -> Result<String> {
 pub fn sanitize_file_name(name: &str) -> String {
     let cleaned: String = name
         .chars()
-        .map(|c| if r#"<>:"/\|?*"#.contains(c) || c.is_control() { '-' } else { c })
+        .map(|c| {
+            if r#"<>:"/\|?*"#.contains(c) || c.is_control() {
+                '-'
+            } else {
+                c
+            }
+        })
         .collect();
     let trimmed = cleaned.trim().trim_matches('.').trim();
     if trimmed.is_empty() {
@@ -479,7 +493,9 @@ pub fn word_count(text: &str) -> usize {
     text.lines()
         .filter(|line| {
             let t = line.trim();
-            !(t.is_empty() || t.chars().all(|c| c == '-' || c == '*' || c == '_' || c == '#'))
+            !(t.is_empty()
+                || t.chars()
+                    .all(|c| c == '-' || c == '*' || c == '_' || c == '#'))
         })
         .map(|line| {
             line.split_whitespace()
@@ -542,11 +558,30 @@ mod tests {
     #[test]
     fn reference_names_accept_ordinary_files_and_reject_escapes() {
         let root = Path::new("/p");
-        for ok in ["map of the coast.png", "notes (1).txt", "Straße.pdf", "PXL_2026.jpg"] {
-            assert!(reference_path(root, ok).is_ok(), "{ok:?} should be accepted");
+        for ok in [
+            "map of the coast.png",
+            "notes (1).txt",
+            "Straße.pdf",
+            "PXL_2026.jpg",
+        ] {
+            assert!(
+                reference_path(root, ok).is_ok(),
+                "{ok:?} should be accepted"
+            );
         }
-        for bad in ["../x", "a/b", "a\\b", "C:evil", "..", " padded.txt", "tab\there"] {
-            assert!(reference_path(root, bad).is_err(), "{bad:?} should be rejected");
+        for bad in [
+            "../x",
+            "a/b",
+            "a\\b",
+            "C:evil",
+            "..",
+            " padded.txt",
+            "tab\there",
+        ] {
+            assert!(
+                reference_path(root, bad).is_err(),
+                "{bad:?} should be rejected"
+            );
         }
     }
 
@@ -556,7 +591,7 @@ mod tests {
         assert_eq!(sanitize_file_name("   "), "Untitled");
     }
 
-    fn role_of<'a>(project: &'a Project, role: NodeRole) -> Option<&'a Node> {
+    fn role_of(project: &Project, role: NodeRole) -> Option<&Node> {
         project.roots.iter().find(|r| r.role == Some(role))
     }
 
@@ -616,7 +651,9 @@ mod tests {
     #[test]
     fn ensure_roots_recreates_a_missing_root() {
         let mut project = Project::starter("Untitled".into());
-        project.roots.retain(|r| r.role != Some(NodeRole::Characters));
+        project
+            .roots
+            .retain(|r| r.role != Some(NodeRole::Characters));
         assert_eq!(project.roots.len(), 3);
 
         project.ensure_roots();
@@ -650,8 +687,14 @@ mod tests {
         let back: Project = serde_json::from_str(&json).unwrap();
         assert_eq!(back.trash.len(), 1);
         assert_eq!(back.trash[0].node.id, chapter.id);
-        assert_eq!(back.trash[0].parent_id.as_deref(), Some(project.roots[0].id.as_str()));
-        assert!(back.manuscript_documents().is_empty(), "trash is outside the tree");
+        assert_eq!(
+            back.trash[0].parent_id.as_deref(),
+            Some(project.roots[0].id.as_str())
+        );
+        assert!(
+            back.manuscript_documents().is_empty(),
+            "trash is outside the tree"
+        );
     }
 
     /// Purging a folder takes every file underneath it, and nothing else.
@@ -700,6 +743,9 @@ mod tests {
         let plain = Node::new("Research", NodeKind::Folder);
         assert_eq!(plain.role, None);
         let json = serde_json::to_string(&plain).unwrap();
-        assert!(!json.contains("role"), "untagged nodes stay out of the file");
+        assert!(
+            !json.contains("role"),
+            "untagged nodes stay out of the file"
+        );
     }
 }

@@ -79,8 +79,7 @@ export function Assistant({
       <div className="pane">
         <div className="empty">
           <p>
-            The assistant needs a {providerLabel} API key before it can read anything or
-            answer.
+            The assistant needs a {providerLabel} API key before it can read anything or answer.
           </p>
           <p>
             <button type="button" className="btn" onClick={onOpenSettings}>
@@ -98,8 +97,8 @@ export function Assistant({
         {messages.length === 0 ? (
           <div className="empty">
             <p>
-              Ask about the chapter you're in. It reads the text and the outline you've
-              ticked below, and nothing else.
+              Ask about the chapter you're in. It reads the text and the outline you've ticked
+              below, and nothing else.
             </p>
           </div>
         ) : (

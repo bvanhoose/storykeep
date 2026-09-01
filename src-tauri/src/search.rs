@@ -85,17 +85,11 @@ pub fn search(root: &Path, project: &Project, query: &str) -> Result<Results> {
 }
 
 fn collect(results: &mut Results, node: &Node, source: Source, text: &str, query: &str) {
-    let mut in_document = 0;
-    for (start, end) in find_all(text, query) {
-        if results.hits.len() >= MAX_HITS {
+    for (in_document, (start, end)) in find_all(text, query).into_iter().enumerate() {
+        if results.hits.len() >= MAX_HITS || in_document >= MAX_PER_DOCUMENT {
             results.truncated = true;
             return;
         }
-        if in_document >= MAX_PER_DOCUMENT {
-            results.truncated = true;
-            return;
-        }
-        in_document += 1;
 
         let (snippet, snippet_offset) = snippet(text, start, end);
         results.hits.push(Hit {
@@ -186,7 +180,10 @@ mod tests {
 
     #[test]
     fn finds_every_occurrence_regardless_of_case() {
-        assert_eq!(find_all("Rain, rain, RAIN.", "rain"), vec![(0, 4), (6, 10), (12, 16)]);
+        assert_eq!(
+            find_all("Rain, rain, RAIN.", "rain"),
+            vec![(0, 4), (6, 10), (12, 16)]
+        );
     }
 
     #[test]
@@ -228,7 +225,10 @@ mod tests {
         let (snip, at) = snippet(&text, s, e);
         assert!(snip.starts_with('…') && snip.ends_with('…'));
         assert_eq!(snip.chars().count(), 1 + CONTEXT + 6 + CONTEXT + 1);
-        assert_eq!(&snip[snip.char_indices().nth(at).unwrap().0..][..6], "needle");
+        assert_eq!(
+            &snip[snip.char_indices().nth(at).unwrap().0..][..6],
+            "needle"
+        );
     }
 
     #[test]
@@ -251,12 +251,19 @@ mod tests {
             "The ledger was gone.\nAdeline lied about the ledger.",
         )
         .unwrap();
-        std::fs::write(project::outline_path(&root, &chapter).unwrap(), "— she finds the ledger").unwrap();
+        std::fs::write(
+            project::outline_path(&root, &chapter).unwrap(),
+            "— she finds the ledger",
+        )
+        .unwrap();
         project.roots[0].children[0].title = "The Ledger".into();
 
         let results = search(&root, &project, "ledger").unwrap();
         let sources: Vec<Source> = results.hits.iter().map(|h| h.source).collect();
-        assert_eq!(sources, vec![Source::Title, Source::Body, Source::Body, Source::Outline]);
+        assert_eq!(
+            sources,
+            vec![Source::Title, Source::Body, Source::Body, Source::Outline]
+        );
         assert!(!results.truncated);
         assert!(search(&root, &project, "").unwrap().hits.is_empty());
 

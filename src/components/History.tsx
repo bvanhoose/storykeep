@@ -48,8 +48,8 @@ export function History({
         <div className="empty">
           <p>No snapshots of this document yet.</p>
           <p>
-            One is taken by itself the first time you edit each day; Ctrl Shift S takes one
-            whenever you like, before a rewrite you might regret.
+            One is taken by itself the first time you edit each day; Ctrl Shift S takes one whenever
+            you like, before a rewrite you might regret.
           </p>
         </div>
       ) : (

@@ -35,7 +35,14 @@ function Dialog({
 
   return (
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={panel}>
+      <div
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        ref={panel}
+      >
         <h2>{title}</h2>
         {children}
       </div>
@@ -77,7 +84,10 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsDialogPr
 
   useEffect(() => {
     setKeyDraft("");
-    api.keyStatus(provider).then(setKeyStatus).catch(() => setKeyStatus(null));
+    api
+      .keyStatus(provider)
+      .then(setKeyStatus)
+      .catch(() => setKeyStatus(null));
   }, [provider]);
 
   const patch = (change: Partial<Settings>) => onChange({ ...settings, ...change });
@@ -153,7 +163,9 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsDialogPr
             min={12}
             max={32}
             value={settings.editorFontSize}
-            onChange={(e) => patch({ editorFontSize: clampNumber(e.currentTarget.value, 12, 32, 18) })}
+            onChange={(e) =>
+              patch({ editorFontSize: clampNumber(e.currentTarget.value, 12, 32, 18) })
+            }
           />
         </div>
         <div className="field">
@@ -178,7 +190,9 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsDialogPr
             min={40}
             max={110}
             value={settings.editorMeasure}
-            onChange={(e) => patch({ editorMeasure: clampNumber(e.currentTarget.value, 40, 110, 68) })}
+            onChange={(e) =>
+              patch({ editorMeasure: clampNumber(e.currentTarget.value, 40, 110, 68) })
+            }
           />
         </div>
       </div>
@@ -266,7 +280,11 @@ export function SettingsDialog({ settings, onChange, onClose }: SettingsDialogPr
             value={keyDraft}
             spellCheck={false}
             autoComplete="off"
-            placeholder={keyStatus?.configured ? "A key is saved — type a new one to replace it" : "Paste the key"}
+            placeholder={
+              keyStatus?.configured
+                ? "A key is saved — type a new one to replace it"
+                : "Paste the key"
+            }
             onChange={(e) => setKeyDraft(e.currentTarget.value)}
             onKeyDown={(e) => e.key === "Enter" && keyDraft.trim() && void saveKey()}
           />
@@ -404,7 +422,13 @@ interface ProjectDetailsProps {
   onClose: () => void;
 }
 
-export function ProjectDetailsDialog({ project, path, days, onSave, onClose }: ProjectDetailsProps) {
+export function ProjectDetailsDialog({
+  project,
+  path,
+  days,
+  onSave,
+  onClose,
+}: ProjectDetailsProps) {
   const [title, setTitle] = useState(project.title);
   const [author, setAuthor] = useState(project.author);
   const [manuscript, setManuscript] = useState(String(project.targets.manuscript || ""));

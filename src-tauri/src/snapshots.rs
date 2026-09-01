@@ -97,8 +97,7 @@ pub fn list(root: &Path, id: &str) -> Result<Vec<Snapshot>> {
     // Names are zero-padded timestamps, so their order is their age. Compare
     // stems, not names: with the extension on, "Z-1.md" would sort before
     // "Z.md" even though it was taken second.
-    let stem = |s: &Snapshot| s.name.trim_end_matches(".md").to_string();
-    out.sort_by(|a, b| stem(b).cmp(&stem(a)));
+    out.sort_by_key(|s| std::cmp::Reverse(s.name.trim_end_matches(".md").to_string()));
     Ok(out)
 }
 

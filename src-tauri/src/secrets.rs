@@ -107,7 +107,10 @@ impl Store {
 
     fn file_set(&self, provider: &str, key: &str) -> Result<()> {
         let mut map = self.file_read()?;
-        map.insert(provider.to_string(), serde_json::Value::String(key.to_string()));
+        map.insert(
+            provider.to_string(),
+            serde_json::Value::String(key.to_string()),
+        );
         self.file_write(&map)
     }
 

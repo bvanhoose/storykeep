@@ -171,12 +171,15 @@ export function useToast() {
   const [toast, setToast] = useState<Toast | null>(null);
   const timer = useRef<number | undefined>(undefined);
 
-  const show = useCallback((text: string, tone: "info" | "error" = "info", action?: ToastAction) => {
-    setToast({ text, tone, action });
-    window.clearTimeout(timer.current);
-    const ttl = action ? 8000 : tone === "error" ? 7000 : 3200;
-    timer.current = window.setTimeout(() => setToast(null), ttl);
-  }, []);
+  const show = useCallback(
+    (text: string, tone: "info" | "error" = "info", action?: ToastAction) => {
+      setToast({ text, tone, action });
+      window.clearTimeout(timer.current);
+      const ttl = action ? 8000 : tone === "error" ? 7000 : 3200;
+      timer.current = window.setTimeout(() => setToast(null), ttl);
+    },
+    [],
+  );
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 

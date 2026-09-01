@@ -11,7 +11,14 @@ interface StatusBarProps {
 
 const format = (n: number) => n.toLocaleString();
 
-export function StatusBar({ node, documentWords, stats, targets, saving, savedAt }: StatusBarProps) {
+export function StatusBar({
+  node,
+  documentWords,
+  stats,
+  targets,
+  saving,
+  savedAt,
+}: StatusBarProps) {
   const today = stats.days.find((d) => d.date === localDate());
   const written = today ? today.end - today.start : null;
 

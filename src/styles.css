@@ -30,12 +30,10 @@
   --danger: #8f3a2c;
   --growth: #3f7a4d;
 
-  --font-ui: "Corbel", "Candara", "Optima", "Gill Sans Nova", "Noto Sans",
-    system-ui, sans-serif;
-  --font-book: "Constantia", "Iowan Old Style", "Palatino Linotype", "Palatino",
-    "Sitka Text", Georgia, serif;
-  --font-mono: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", ui-monospace,
-    monospace;
+  --font-ui: "Corbel", "Candara", "Optima", "Gill Sans Nova", "Noto Sans", system-ui, sans-serif;
+  --font-book:
+    "Constantia", "Iowan Old Style", "Palatino Linotype", "Palatino", "Sitka Text", Georgia, serif;
+  --font-mono: "Cascadia Mono", "Consolas", "DejaVu Sans Mono", ui-monospace, monospace;
 
   --row: 27px;
   --topbar: 40px;

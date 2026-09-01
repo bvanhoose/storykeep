@@ -51,8 +51,7 @@ export function homeRole(kind: NodeKind): NodeRole | null {
 
 /** The top-level root that `id` lives under, at any depth. */
 export function rootContaining(roots: BinderNode[], id: string): BinderNode | null {
-  const holds = (node: BinderNode): boolean =>
-    node.id === id || node.children.some(holds);
+  const holds = (node: BinderNode): boolean => node.id === id || node.children.some(holds);
   return roots.find(holds) ?? null;
 }
 

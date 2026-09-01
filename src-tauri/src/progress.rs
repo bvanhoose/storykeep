@@ -85,10 +85,13 @@ fn load(path: &Path) -> Result<Ledger> {
 
 fn check_date(date: &str) -> Result<()> {
     let ok = date.len() == 10
-        && date
-            .bytes()
-            .enumerate()
-            .all(|(i, b)| if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() });
+        && date.bytes().enumerate().all(|(i, b)| {
+            if i == 4 || i == 7 {
+                b == b'-'
+            } else {
+                b.is_ascii_digit()
+            }
+        });
     if ok {
         Ok(())
     } else {
@@ -110,7 +113,14 @@ mod tests {
     fn a_day_keeps_its_first_count_and_its_latest() {
         let dir = scratch();
         let days = note(&dir, "2026-08-27", 1000).unwrap();
-        assert_eq!(days, vec![Day { date: "2026-08-27".into(), start: 1000, end: 1000 }]);
+        assert_eq!(
+            days,
+            vec![Day {
+                date: "2026-08-27".into(),
+                start: 1000,
+                end: 1000
+            }]
+        );
 
         let days = note(&dir, "2026-08-27", 1412).unwrap();
         assert_eq!(days[0].start, 1000, "the morning count stays");
